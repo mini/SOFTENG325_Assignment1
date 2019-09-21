@@ -61,7 +61,7 @@ public class ConcertResourceIT {
      */
     @Test
     public void testGetSingleConcert() {
-
+    	
         ConcertDTO concert = client.target(WEB_SERVICE_URI + "/concerts/1").request().get(ConcertDTO.class);
 
         assertEquals("PTX: The World Tour", concert.getTitle());
@@ -78,7 +78,7 @@ public class ConcertResourceIT {
         assertEquals(1, concert.getDates().size());
         assertEquals(LocalDateTime.of(2020, 2, 15, 20, 0, 0), concert.getDates().get(0));
     }
-
+    
     /**
      * A more advanced version of the test above. Makes sure the web service still functions correctly when requesting
      * a concert with multiple performers and dates.
@@ -228,578 +228,578 @@ public class ConcertResourceIT {
         assertEquals("Ruel", performers.get(10).getName());
 
     }
-
-    /**
-     * Tests that a 401 error is returned when an incorrect username is supplied on login, and makes sure that
-     * no authentication token is generated.
-     */
-    @Test
-    public void testFailedLogin_IncorrectUsername() {
-        // Log in
-        Response loginResponse = login(client, "tesftuser", "pa55word");
-        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), loginResponse.getStatus());
-        assertNull(loginResponse.getCookies().get("auth"));
-    }
-
-    /**
-     * Tests that a 401 error is returned when an incorrect password is supplied on login, and makes sure that
-     * no authentication token is generated.
-     */
-    @Test
-    public void testFailedLogin_IncorrectPassword() {
-        // Log in
-        Response loginResponse = login(client, "testuser", "pa5word");
-        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), loginResponse.getStatus());
-        assertNull(loginResponse.getCookies().get("auth"));
-    }
-
-    /**
-     * tests that a 200 response is returned when the correct username and password are supplied on login, and that
-     * a cookie named "auth" is generated.
-     */
-    @Test
-    public void testSuccessfulLogin() {
-        // Log in
-        Response loginResponse = login(client, "testuser", "pa55word");
-        assertEquals(Response.Status.OK.getStatusCode(), loginResponse.getStatus());
-        Cookie authCookie = loginResponse.getCookies().get("auth");
-        assertNotNull(authCookie.getValue());
-        assertFalse(authCookie.getValue().isEmpty());
-    }
-
-    /**
-     * Tests that a 401 error is returned when attempting to book while not logged in, and that no booking is actually
-     * made.
-     */
-    @Test
-    public void testAttemptUnauthorizedBooking() {
-
-        List<String> seatLabels = Arrays.asList("C5", "C6");
-
-        BookingRequestDTO bReq = new BookingRequestDTO(
-                1, LocalDateTime.of(2020, 2, 15, 20, 0, 0), seatLabels);
-
-        // Try to book
-        Response response = client.target(WEB_SERVICE_URI + "/bookings")
-                .request().post(Entity.json(bReq));
-
-        // Make sure it didn't work
-        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-
-        // Make sure no seats were booked
-        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
-                .request().get(new GenericType<List<SeatDTO>>() {
-                });
-
-        assertEquals(0, bookedSeats.size());
-
-    }
-
-    /**
-     * Tests that a 201 response is returned when making a valid authorized booking, and that the requested seats now
-     * are correctly reported as being booked.
-     */
-    @Test
-    public void testMakeSuccessfulBooking() {
-
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Attempt booking
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-
-        // Make sure it worked
-        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
-        assertNotNull(response.getLocation());
-
-        // Make sure two seats were booked
-        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
-                .request().get(new GenericType<List<SeatDTO>>() {
-                });
-
-        assertEquals(2, bookedSeats.size());
-
-    }
-
-    /**
-     * Tests that a 201 response is returned when making a valid authorized booking, and that the link returned
-     * allows the user to correctly navigate to the new booking.
-     */
-    @Test
-    public void testGetOwnBookingById() {
-
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Make booking
-        Response bookingResponse = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-
-        // Get the booking
-        BookingDTO booking = client.target(bookingResponse.getLocation()).request().get(BookingDTO.class);
-
-        // Check details
-        assertEquals(1L, booking.getConcertId());
-        assertEquals(LocalDateTime.of(2020, 2, 15, 20, 0, 0), booking.getDate());
-        assertEquals(2, booking.getSeats().size());
-        booking.getSeats().sort(Comparator.comparing(SeatDTO::getLabel));
-        assertEquals("C5", booking.getSeats().get(0).getLabel());
-        assertEquals("C6", booking.getSeats().get(1).getLabel());
-
-    }
-
-    /**
-     * Tests that a 403 error is returned when trying to access a booking of another user,
-     * even if the correct id is known.
-     */
-    @Test
-    public void testAttemptGetOthersBookingById() {
-
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Make booking
-        Response bookingResponse = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-
-        // Get the booking
-        Response response = client.target(bookingResponse.getLocation())
-                .request().get();
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-
-        // Log in as someone else
-        login(client, "testuser2", "pa55word");
-
-        // Attempt to get the booking - should fail
-        response = client.target(bookingResponse.getLocation())
-                .request().get();
-
-        assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
-
-    }
-
-    /**
-     * Test that multiple users are each able to access all of their own bookings. No user should be able to see
-     * the bookings of any other user.
-     */
-    @Test
-    public void testGetAllBookingsForUser() {
-
-        // Log in as user 1
-        login(client, "testuser", "pa55word");
-
-        // Make bookings for user 1
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
-
-        response = attemptBooking(client, 2,
-                LocalDateTime.of(2019, 9, 14, 20, 0, 0),
-                "A1", "A2");
-        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
-
-        // Log in as user 2
-        Client user2Client = ClientBuilder.newClient();
-        try {
-            login(user2Client, "testuser2", "pa55word");
-
-            // Make bookings for user 2
-            response = attemptBooking(user2Client, 3,
-                    LocalDateTime.of(2020, 1, 23, 20, 0, 0),
-                    "C7", "C8");
-            assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
-
-            // Get user 1's bookings
-            List<BookingDTO> user1Bookings = client.target(WEB_SERVICE_URI + "/bookings")
-                    .request().get(new GenericType<List<BookingDTO>>() {
-                    });
-
-            // Make sure they're actually user 1's bookings.
-            assertEquals(2, user1Bookings.size());
-
-            user1Bookings.sort(Comparator.comparing(BookingDTO::getConcertId));
-            assertEquals(LocalDateTime.of(2020, 2, 15, 20, 0, 0), user1Bookings.get(0).getDate());
-            assertEquals(LocalDateTime.of(2019, 9, 14, 20, 0, 0), user1Bookings.get(1).getDate());
-
-            // Get user 2's bookings
-            List<BookingDTO> user2Bookings = user2Client.target(WEB_SERVICE_URI + "/bookings")
-                    .request().get(new GenericType<List<BookingDTO>>() {
-                    });
-
-            // Make sure they're actually user 2's bookings.
-            assertEquals(1, user2Bookings.size());
-            assertEquals(LocalDateTime.of(2020, 1, 23, 20, 0, 0), user2Bookings.get(0).getDate());
-        } finally {
-            user2Client.close();
-        }
-    }
-
-    /**
-     * Tests that a 401 error is returned when trying to access any booking information while not authenticated.
-     */
-    @Test
-    public void testAttemptGetAllBookingsWhenNotAuthenticated() {
-        Response response = client.target(WEB_SERVICE_URI + "/bookings").request().get();
-        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    }
-
-    /**
-     * Tests that a 400 error is returned when trying to book seats for a date on which a given concert is not scheduled.
-     */
-    @Test
-    public void testAttemptBookingWrongDate() {
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Attempt booking - should fail with bad request
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 3, 15, 20, 0, 0),
-                "C5", "C6");
-        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    }
-
-    /**
-     * Tests that a 400 error is returned when trying to book seats for a nonexistent concert.
-     */
-    @Test
-    public void testAttemptBookingIncorrectConcertId() {
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Attempt booking - should fail with bad request
-        Response response = attemptBooking(client, 100,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    }
-
-    /**
-     * Tests that a 403 error is returned when trying to book a set of seats, all of which have already been booked.
-     * Also makes sure that the original booker of those seats retains those seats, and the new user does not.
-     */
-    @Test
-    public void testAttemptDoubleBooking_SameSeats() {
-        // Log in as user 1
-        login(client, "testuser", "pa55word");
-
-        // Make bookings for user 1
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
-
-        // Log in as user 2
-        Client user2Client = ClientBuilder.newClient();
-        try {
-            login(user2Client, "testuser2", "pa55word");
-
-            // Try to make the same booking for user 2 - it should fail.
-            response = attemptBooking(user2Client, 1,
-                    LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                    "C5", "C6");
-            assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
-            assertNull(response.getLocation());
-
-            // Make sure user 1 still has the booking, and user 2 does not.
-
-            // Get user 1's bookings
-            List<BookingDTO> user1Bookings = client.target(WEB_SERVICE_URI + "/bookings")
-                    .request().get(new GenericType<List<BookingDTO>>() {
-                    });
-            assertEquals(1, user1Bookings.size());
-
-
-            // Get user 2's bookings
-            List<BookingDTO> user2Bookings = user2Client.target(WEB_SERVICE_URI + "/bookings")
-                    .request().get(new GenericType<List<BookingDTO>>() {
-                    });
-            assertEquals(0, user2Bookings.size());
-        } finally {
-            user2Client.close();
-        }
-    }
-
-    /**
-     * Tests that a 403 error is returned when trying to book a set of seats, some of which have already been booked.
-     * Also makes sure that the original user retains their booking, and that the second booking is not partially
-     * completed (i.e. NO seats from the second booking request should be booked, even if some of them are available).
-     */
-    @Test
-    public void testAttemptDoubleBooking_OverlappingSeats() {
-        // Log in as user 1
-        login(client, "testuser", "pa55word");
-
-        // Make bookings for user 1
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
-
-        // Log in as user 2
-        Client user2Client = ClientBuilder.newClient();
-        try {
-            login(user2Client, "testuser2", "pa55word");
-
-            // Try to make the same booking for user 2 - it should fail.
-            response = attemptBooking(user2Client, 1,
-                    LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                    "C6", "C7");
-            assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
-            assertNull(response.getLocation());
-
-            // Make sure user 1 still has the booking, and user 2 does not.
-
-            // Get user 1's bookings
-            List<BookingDTO> user1Bookings = client.target(WEB_SERVICE_URI + "/bookings")
-                    .request().get(new GenericType<List<BookingDTO>>() {
-                    });
-            assertEquals(1, user1Bookings.size());
-
-
-            // Get user 2's bookings
-            List<BookingDTO> user2Bookings = user2Client.target(WEB_SERVICE_URI + "/bookings")
-                    .request().get(new GenericType<List<BookingDTO>>() {
-                    });
-            assertEquals(0, user2Bookings.size());
-        } finally {
-            user2Client.close();
-        }
-
-        // Make sure only seats C5 and C6 are booked. C7 shouldn't be booked.
-        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
-                .request().get(new GenericType<List<SeatDTO>>() {
-                });
-
-        assertEquals(2, bookedSeats.size());
-        bookedSeats.sort(Comparator.comparing(SeatDTO::getLabel));
-        assertEquals("C5", bookedSeats.get(0).getLabel());
-        assertEquals("C6", bookedSeats.get(1).getLabel());
-
-    }
-
-    /**
-     * Tests that the booked seats for a particular concert on a particular date can be queried.
-     */
-    @Test
-    public void testGetBookedSeatsForDate() {
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Book some seats
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-
-        // Get booked seats - should be C5 and C6
-        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
-                .request().get(new GenericType<List<SeatDTO>>() {
-                });
-
-        assertEquals(2, bookedSeats.size());
-        bookedSeats.sort(Comparator.comparing(SeatDTO::getLabel));
-        assertEquals("C5", bookedSeats.get(0).getLabel());
-        assertEquals("C6", bookedSeats.get(1).getLabel());
-    }
-
-    /**
-     * Tests that the unbooked seats for a particular concert on a particular date can be queried.
-     */
-    @Test
-    public void testGetUnbookedSeatsForDate() {
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Book some seats
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-
-        // Get unbooked seats - should be everything except C5 and C6
-        List<SeatDTO> unbookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Unbooked")
-                .request().get(new GenericType<List<SeatDTO>>() {
-                });
-
-        assertEquals(118, unbookedSeats.size());
-        unbookedSeats.sort(Comparator.comparing(SeatDTO::getLabel));
-        for (SeatDTO seat : unbookedSeats) {
-            if (seat.getLabel().equals("C5") || seat.getLabel().equals("C6")) {
-                fail("Shouldn't have seen C5 or C6.");
-            }
-        }
-    }
-
-    /**
-     * Tests that all seats for a particular concert on a particular date can be queried.
-     */
-    @Test
-    public void testGetAllSeatsForDate() {
-        // Log in
-        login(client, "testuser", "pa55word");
-
-        // Book some seats
-        Response response = attemptBooking(client, 1,
-                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-                "C5", "C6");
-
-        // Get hopefully all seats
-        List<SeatDTO> seats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Any")
-                .request().get(new GenericType<List<SeatDTO>>() {
-                });
-
-        assertEquals(120, seats.size());
-        List<String> labels = seats.stream().map(SeatDTO::getLabel).collect(Collectors.toList());
-        for (char rowLabel = 'A'; rowLabel <= 'J'; rowLabel++) {
-            for (int num = 1; num <= 12; num++) {
-                String label = "" + rowLabel + num;
-                assertTrue(labels.contains(label));
-            }
-        }
-    }
-
-    // Tests for publish / subscribe functions - uncomment when ready.
-    // --------------------------------------------------------------------
-
+//
 //    /**
-//     * Tests that a 401 error is returned when trying to make a subscription while not authenticated.
+//     * Tests that a 401 error is returned when an incorrect username is supplied on login, and makes sure that
+//     * no authentication token is generated.
 //     */
 //    @Test
-//    public void testUnauthorizedSubscription() throws InterruptedException, ExecutionException, TimeoutException {
-//        // Attempt to subscribe
-//        LocalDateTime date = LocalDateTime.of(2020, 2, 15, 20, 0, 0);
-//        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(1, date, 50);
-//        Future<Response> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
-//                .request().async().post(Entity.json(subInfo));
+//    public void testFailedLogin_IncorrectUsername() {
+//        // Log in
+//        Response loginResponse = login(client, "tesftuser", "pa55word");
+//        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), loginResponse.getStatus());
+//        assertNull(loginResponse.getCookies().get("auth"));
+//    }
 //
-//        // Wait for at most 1 second - the failure should be near-instant.
-//        Response response = future.get(1, TimeUnit.SECONDS);
+//    /**
+//     * Tests that a 401 error is returned when an incorrect password is supplied on login, and makes sure that
+//     * no authentication token is generated.
+//     */
+//    @Test
+//    public void testFailedLogin_IncorrectPassword() {
+//        // Log in
+//        Response loginResponse = login(client, "testuser", "pa5word");
+//        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), loginResponse.getStatus());
+//        assertNull(loginResponse.getCookies().get("auth"));
+//    }
 //
+//    /**
+//     * tests that a 200 response is returned when the correct username and password are supplied on login, and that
+//     * a cookie named "auth" is generated.
+//     */
+//    @Test
+//    public void testSuccessfulLogin() {
+//        // Log in
+//        Response loginResponse = login(client, "testuser", "pa55word");
+//        assertEquals(Response.Status.OK.getStatusCode(), loginResponse.getStatus());
+//        Cookie authCookie = loginResponse.getCookies().get("auth");
+//        assertNotNull(authCookie.getValue());
+//        assertFalse(authCookie.getValue().isEmpty());
+//    }
+//
+//    /**
+//     * Tests that a 401 error is returned when attempting to book while not logged in, and that no booking is actually
+//     * made.
+//     */
+//    @Test
+//    public void testAttemptUnauthorizedBooking() {
+//
+//        List<String> seatLabels = Arrays.asList("C5", "C6");
+//
+//        BookingRequestDTO bReq = new BookingRequestDTO(
+//                1, LocalDateTime.of(2020, 2, 15, 20, 0, 0), seatLabels);
+//
+//        // Try to book
+//        Response response = client.target(WEB_SERVICE_URI + "/bookings")
+//                .request().post(Entity.json(bReq));
+//
+//        // Make sure it didn't work
+//        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+//
+//        // Make sure no seats were booked
+//        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
+//                .request().get(new GenericType<List<SeatDTO>>() {
+//                });
+//
+//        assertEquals(0, bookedSeats.size());
+//
+//    }
+//
+//    /**
+//     * Tests that a 201 response is returned when making a valid authorized booking, and that the requested seats now
+//     * are correctly reported as being booked.
+//     */
+//    @Test
+//    public void testMakeSuccessfulBooking() {
+//
+//        // Log in
+//        login(client, "testuser", "pa55word");
+//
+//        // Attempt booking
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//
+//        // Make sure it worked
+//        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+//        assertNotNull(response.getLocation());
+//
+//        // Make sure two seats were booked
+//        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
+//                .request().get(new GenericType<List<SeatDTO>>() {
+//                });
+//
+//        assertEquals(2, bookedSeats.size());
+//
+//    }
+//
+//    /**
+//     * Tests that a 201 response is returned when making a valid authorized booking, and that the link returned
+//     * allows the user to correctly navigate to the new booking.
+//     */
+//    @Test
+//    public void testGetOwnBookingById() {
+//
+//        // Log in
+//        login(client, "testuser", "pa55word");
+//
+//        // Make booking
+//        Response bookingResponse = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//
+//        // Get the booking
+//        BookingDTO booking = client.target(bookingResponse.getLocation()).request().get(BookingDTO.class);
+//
+//        // Check details
+//        assertEquals(1L, booking.getConcertId());
+//        assertEquals(LocalDateTime.of(2020, 2, 15, 20, 0, 0), booking.getDate());
+//        assertEquals(2, booking.getSeats().size());
+//        booking.getSeats().sort(Comparator.comparing(SeatDTO::getLabel));
+//        assertEquals("C5", booking.getSeats().get(0).getLabel());
+//        assertEquals("C6", booking.getSeats().get(1).getLabel());
+//
+//    }
+//
+//    /**
+//     * Tests that a 403 error is returned when trying to access a booking of another user,
+//     * even if the correct id is known.
+//     */
+//    @Test
+//    public void testAttemptGetOthersBookingById() {
+//
+//        // Log in
+//        login(client, "testuser", "pa55word");
+//
+//        // Make booking
+//        Response bookingResponse = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//
+//        // Get the booking
+//        Response response = client.target(bookingResponse.getLocation())
+//                .request().get();
+//        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+//
+//        // Log in as someone else
+//        login(client, "testuser2", "pa55word");
+//
+//        // Attempt to get the booking - should fail
+//        response = client.target(bookingResponse.getLocation())
+//                .request().get();
+//
+//        assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
+//
+//    }
+//
+//    /**
+//     * Test that multiple users are each able to access all of their own bookings. No user should be able to see
+//     * the bookings of any other user.
+//     */
+//    @Test
+//    public void testGetAllBookingsForUser() {
+//
+//        // Log in as user 1
+//        login(client, "testuser", "pa55word");
+//
+//        // Make bookings for user 1
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+//
+//        response = attemptBooking(client, 2,
+//                LocalDateTime.of(2019, 9, 14, 20, 0, 0),
+//                "A1", "A2");
+//        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+//
+//        // Log in as user 2
+//        Client user2Client = ClientBuilder.newClient();
+//        try {
+//            login(user2Client, "testuser2", "pa55word");
+//
+//            // Make bookings for user 2
+//            response = attemptBooking(user2Client, 3,
+//                    LocalDateTime.of(2020, 1, 23, 20, 0, 0),
+//                    "C7", "C8");
+//            assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+//
+//            // Get user 1's bookings
+//            List<BookingDTO> user1Bookings = client.target(WEB_SERVICE_URI + "/bookings")
+//                    .request().get(new GenericType<List<BookingDTO>>() {
+//                    });
+//
+//            // Make sure they're actually user 1's bookings.
+//            assertEquals(2, user1Bookings.size());
+//
+//            user1Bookings.sort(Comparator.comparing(BookingDTO::getConcertId));
+//            assertEquals(LocalDateTime.of(2020, 2, 15, 20, 0, 0), user1Bookings.get(0).getDate());
+//            assertEquals(LocalDateTime.of(2019, 9, 14, 20, 0, 0), user1Bookings.get(1).getDate());
+//
+//            // Get user 2's bookings
+//            List<BookingDTO> user2Bookings = user2Client.target(WEB_SERVICE_URI + "/bookings")
+//                    .request().get(new GenericType<List<BookingDTO>>() {
+//                    });
+//
+//            // Make sure they're actually user 2's bookings.
+//            assertEquals(1, user2Bookings.size());
+//            assertEquals(LocalDateTime.of(2020, 1, 23, 20, 0, 0), user2Bookings.get(0).getDate());
+//        } finally {
+//            user2Client.close();
+//        }
+//    }
+//
+//    /**
+//     * Tests that a 401 error is returned when trying to access any booking information while not authenticated.
+//     */
+//    @Test
+//    public void testAttemptGetAllBookingsWhenNotAuthenticated() {
+//        Response response = client.target(WEB_SERVICE_URI + "/bookings").request().get();
 //        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
 //    }
 //
 //    /**
-//     * Tests that a 400 error is returned when trying to make a subscription for a nonexistent concert.
+//     * Tests that a 400 error is returned when trying to book seats for a date on which a given concert is not scheduled.
 //     */
 //    @Test
-//    public void testBadSubscription_NonexistentConcert() throws InterruptedException, ExecutionException, TimeoutException {
-//
-//        testBadSubscription(100, LocalDateTime.of(2020, 2, 15, 20, 0, 0));
-//    }
-//
-//    /**
-//     * Tests that a 400 error is returned when trying to make a subscription for a nonexistent date.
-//     */
-//    @Test
-//    public void testBadSubscription_NonexistentDate() throws InterruptedException, ExecutionException, TimeoutException {
-//
-//        testBadSubscription(1, LocalDateTime.of(2030, 2, 15, 20, 0, 0));
-//    }
-//
-//    private void testBadSubscription(long concertId, LocalDateTime date) throws InterruptedException, ExecutionException, TimeoutException {
+//    public void testAttemptBookingWrongDate() {
 //        // Log in
 //        login(client, "testuser", "pa55word");
 //
-//        // Attempt to subscribe
-//        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(concertId, date, 50);
-//        Future<Response> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
-//                .request().async().post(Entity.json(subInfo));
-//
-//        // Wait for at most 1 second - the failure should be near-instant.
-//        Response response = future.get(1, TimeUnit.SECONDS);
-//
+//        // Attempt booking - should fail with bad request
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 3, 15, 20, 0, 0),
+//                "C5", "C6");
 //        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
 //    }
 //
 //    /**
-//     * Tests that, when authenticated, a subscription can be made to /subscribe/concertInfo, and that subscribers are
-//     * then notified when the conditions of their subscription are met. The subscribers won't be notified beforehand
-//     * by mistake.
+//     * Tests that a 400 error is returned when trying to book seats for a nonexistent concert.
 //     */
 //    @Test
-//    public void testSubscription() throws ExecutionException, InterruptedException {
-//
+//    public void testAttemptBookingIncorrectConcertId() {
 //        // Log in
 //        login(client, "testuser", "pa55word");
 //
-//        // Subscribe
-//        LocalDateTime date = LocalDateTime.of(2020, 2, 15, 20, 0, 0);
-//        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(1, date, 50);
-//        Future<ConcertInfoNotificationDTO> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
-//                .request().async().post(Entity.json(subInfo), ConcertInfoNotificationDTO.class);
+//        // Attempt booking - should fail with bad request
+//        Response response = attemptBooking(client, 100,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+//    }
 //
+//    /**
+//     * Tests that a 403 error is returned when trying to book a set of seats, all of which have already been booked.
+//     * Also makes sure that the original booker of those seats retains those seats, and the new user does not.
+//     */
+//    @Test
+//    public void testAttemptDoubleBooking_SameSeats() {
+//        // Log in as user 1
+//        login(client, "testuser", "pa55word");
+//
+//        // Make bookings for user 1
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+//
+//        // Log in as user 2
 //        Client user2Client = ClientBuilder.newClient();
 //        try {
-//            // Now, in the meantime, book all of rows A through D
 //            login(user2Client, "testuser2", "pa55word");
-//            attemptBooking(user2Client, 1, date, 'A', 'D');
 //
-//            // Now, wait two seconds to see if we received a sub response - we shouldn't have!
-//            try {
-//                future.get(2, TimeUnit.SECONDS);
-//                fail(); // Shouldn't have worked.
-//            } catch (TimeoutException e) {
-//                // Good!
-//            }
+//            // Try to make the same booking for user 2 - it should fail.
+//            response = attemptBooking(user2Client, 1,
+//                    LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                    "C5", "C6");
+//            assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
+//            assertNull(response.getLocation());
 //
-//            // Now, in the meantime, book all of rows E through G
-//            attemptBooking(user2Client, 1, date, 'E', 'G');
+//            // Make sure user 1 still has the booking, and user 2 does not.
 //
-//            // Now, wait to see if we've received a sub response - we SHOULD have!
-//            try {
-//                ConcertInfoNotificationDTO subResponse = future.get(2, TimeUnit.SECONDS);
-//                // Should be 36 seats remaining.
-//                assertEquals(36, subResponse.getNumSeatsRemaining());
-//            } catch (TimeoutException e) {
-//                fail("Future took too long to return - probable error.");
-//            }
+//            // Get user 1's bookings
+//            List<BookingDTO> user1Bookings = client.target(WEB_SERVICE_URI + "/bookings")
+//                    .request().get(new GenericType<List<BookingDTO>>() {
+//                    });
+//            assertEquals(1, user1Bookings.size());
 //
+//
+//            // Get user 2's bookings
+//            List<BookingDTO> user2Bookings = user2Client.target(WEB_SERVICE_URI + "/bookings")
+//                    .request().get(new GenericType<List<BookingDTO>>() {
+//                    });
+//            assertEquals(0, user2Bookings.size());
 //        } finally {
 //            user2Client.close();
 //        }
+//    }
+//
+//    /**
+//     * Tests that a 403 error is returned when trying to book a set of seats, some of which have already been booked.
+//     * Also makes sure that the original user retains their booking, and that the second booking is not partially
+//     * completed (i.e. NO seats from the second booking request should be booked, even if some of them are available).
+//     */
+//    @Test
+//    public void testAttemptDoubleBooking_OverlappingSeats() {
+//        // Log in as user 1
+//        login(client, "testuser", "pa55word");
+//
+//        // Make bookings for user 1
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//        assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+//
+//        // Log in as user 2
+//        Client user2Client = ClientBuilder.newClient();
+//        try {
+//            login(user2Client, "testuser2", "pa55word");
+//
+//            // Try to make the same booking for user 2 - it should fail.
+//            response = attemptBooking(user2Client, 1,
+//                    LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                    "C6", "C7");
+//            assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
+//            assertNull(response.getLocation());
+//
+//            // Make sure user 1 still has the booking, and user 2 does not.
+//
+//            // Get user 1's bookings
+//            List<BookingDTO> user1Bookings = client.target(WEB_SERVICE_URI + "/bookings")
+//                    .request().get(new GenericType<List<BookingDTO>>() {
+//                    });
+//            assertEquals(1, user1Bookings.size());
+//
+//
+//            // Get user 2's bookings
+//            List<BookingDTO> user2Bookings = user2Client.target(WEB_SERVICE_URI + "/bookings")
+//                    .request().get(new GenericType<List<BookingDTO>>() {
+//                    });
+//            assertEquals(0, user2Bookings.size());
+//        } finally {
+//            user2Client.close();
+//        }
+//
+//        // Make sure only seats C5 and C6 are booked. C7 shouldn't be booked.
+//        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
+//                .request().get(new GenericType<List<SeatDTO>>() {
+//                });
+//
+//        assertEquals(2, bookedSeats.size());
+//        bookedSeats.sort(Comparator.comparing(SeatDTO::getLabel));
+//        assertEquals("C5", bookedSeats.get(0).getLabel());
+//        assertEquals("C6", bookedSeats.get(1).getLabel());
 //
 //    }
 //
 //    /**
-//     * Tests that, if subscribed to notifications about a particular concert / date, a user won't receive notifications
-//     * about unrelated concerts / dates.
+//     * Tests that the booked seats for a particular concert on a particular date can be queried.
 //     */
 //    @Test
-//    public void testSubscriptionForDifferentConcert() throws ExecutionException, InterruptedException {
-//
+//    public void testGetBookedSeatsForDate() {
 //        // Log in
 //        login(client, "testuser", "pa55word");
 //
-//        // Subscribe
-//        LocalDateTime date = LocalDateTime.of(2020, 2, 15, 20, 0, 0);
-//        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(1, date, 50);
-//        Future<ConcertInfoNotificationDTO> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
-//                .request().async().post(Entity.json(subInfo), ConcertInfoNotificationDTO.class);
+//        // Book some seats
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
 //
-//        // User 2 books out a whole theatre - but for a different concert.
-//        LocalDateTime user2Date = LocalDateTime.of(2019, 9, 12, 20, 0, 0);
-//        Client user2Client = ClientBuilder.newClient();
-//        try {
-//            // Make the booking
-//            login(user2Client, "testuser2", "pa55word");
-//            attemptBooking(user2Client, 2, user2Date, 'A', 'J');
+//        // Get booked seats - should be C5 and C6
+//        List<SeatDTO> bookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Booked")
+//                .request().get(new GenericType<List<SeatDTO>>() {
+//                });
 //
-//            // Now, wait two seconds to see if user 1 received a sub response - we shouldn't have (different concert / date).
-//            try {
-//                future.get(2, TimeUnit.SECONDS);
-//                fail(); // Shouldn't have worked.
-//            } catch (TimeoutException e) {
-//                // Good!
-//            }
-//
-//        } finally {
-//            user2Client.close();
-//        }
-//
+//        assertEquals(2, bookedSeats.size());
+//        bookedSeats.sort(Comparator.comparing(SeatDTO::getLabel));
+//        assertEquals("C5", bookedSeats.get(0).getLabel());
+//        assertEquals("C6", bookedSeats.get(1).getLabel());
 //    }
+//
+//    /**
+//     * Tests that the unbooked seats for a particular concert on a particular date can be queried.
+//     */
+//    @Test
+//    public void testGetUnbookedSeatsForDate() {
+//        // Log in
+//        login(client, "testuser", "pa55word");
+//
+//        // Book some seats
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//
+//        // Get unbooked seats - should be everything except C5 and C6
+//        List<SeatDTO> unbookedSeats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Unbooked")
+//                .request().get(new GenericType<List<SeatDTO>>() {
+//                });
+//
+//        assertEquals(118, unbookedSeats.size());
+//        unbookedSeats.sort(Comparator.comparing(SeatDTO::getLabel));
+//        for (SeatDTO seat : unbookedSeats) {
+//            if (seat.getLabel().equals("C5") || seat.getLabel().equals("C6")) {
+//                fail("Shouldn't have seen C5 or C6.");
+//            }
+//        }
+//    }
+//
+//    /**
+//     * Tests that all seats for a particular concert on a particular date can be queried.
+//     */
+//    @Test
+//    public void testGetAllSeatsForDate() {
+//        // Log in
+//        login(client, "testuser", "pa55word");
+//
+//        // Book some seats
+//        Response response = attemptBooking(client, 1,
+//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+//                "C5", "C6");
+//
+//        // Get hopefully all seats
+//        List<SeatDTO> seats = client.target(WEB_SERVICE_URI + "/seats/2020-02-15T20:00:00?status=Any")
+//                .request().get(new GenericType<List<SeatDTO>>() {
+//                });
+//
+//        assertEquals(120, seats.size());
+//        List<String> labels = seats.stream().map(SeatDTO::getLabel).collect(Collectors.toList());
+//        for (char rowLabel = 'A'; rowLabel <= 'J'; rowLabel++) {
+//            for (int num = 1; num <= 12; num++) {
+//                String label = "" + rowLabel + num;
+//                assertTrue(labels.contains(label));
+//            }
+//        }
+//    }
+//
+//    // Tests for publish / subscribe functions - uncomment when ready.
+//    // --------------------------------------------------------------------
+//
+////    /**
+////     * Tests that a 401 error is returned when trying to make a subscription while not authenticated.
+////     */
+////    @Test
+////    public void testUnauthorizedSubscription() throws InterruptedException, ExecutionException, TimeoutException {
+////        // Attempt to subscribe
+////        LocalDateTime date = LocalDateTime.of(2020, 2, 15, 20, 0, 0);
+////        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(1, date, 50);
+////        Future<Response> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
+////                .request().async().post(Entity.json(subInfo));
+////
+////        // Wait for at most 1 second - the failure should be near-instant.
+////        Response response = future.get(1, TimeUnit.SECONDS);
+////
+////        assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+////    }
+////
+////    /**
+////     * Tests that a 400 error is returned when trying to make a subscription for a nonexistent concert.
+////     */
+////    @Test
+////    public void testBadSubscription_NonexistentConcert() throws InterruptedException, ExecutionException, TimeoutException {
+////
+////        testBadSubscription(100, LocalDateTime.of(2020, 2, 15, 20, 0, 0));
+////    }
+////
+////    /**
+////     * Tests that a 400 error is returned when trying to make a subscription for a nonexistent date.
+////     */
+////    @Test
+////    public void testBadSubscription_NonexistentDate() throws InterruptedException, ExecutionException, TimeoutException {
+////
+////        testBadSubscription(1, LocalDateTime.of(2030, 2, 15, 20, 0, 0));
+////    }
+////
+////    private void testBadSubscription(long concertId, LocalDateTime date) throws InterruptedException, ExecutionException, TimeoutException {
+////        // Log in
+////        login(client, "testuser", "pa55word");
+////
+////        // Attempt to subscribe
+////        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(concertId, date, 50);
+////        Future<Response> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
+////                .request().async().post(Entity.json(subInfo));
+////
+////        // Wait for at most 1 second - the failure should be near-instant.
+////        Response response = future.get(1, TimeUnit.SECONDS);
+////
+////        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+////    }
+////
+////    /**
+////     * Tests that, when authenticated, a subscription can be made to /subscribe/concertInfo, and that subscribers are
+////     * then notified when the conditions of their subscription are met. The subscribers won't be notified beforehand
+////     * by mistake.
+////     */
+////    @Test
+////    public void testSubscription() throws ExecutionException, InterruptedException {
+////
+////        // Log in
+////        login(client, "testuser", "pa55word");
+////
+////        // Subscribe
+////        LocalDateTime date = LocalDateTime.of(2020, 2, 15, 20, 0, 0);
+////        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(1, date, 50);
+////        Future<ConcertInfoNotificationDTO> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
+////                .request().async().post(Entity.json(subInfo), ConcertInfoNotificationDTO.class);
+////
+////        Client user2Client = ClientBuilder.newClient();
+////        try {
+////            // Now, in the meantime, book all of rows A through D
+////            login(user2Client, "testuser2", "pa55word");
+////            attemptBooking(user2Client, 1, date, 'A', 'D');
+////
+////            // Now, wait two seconds to see if we received a sub response - we shouldn't have!
+////            try {
+////                future.get(2, TimeUnit.SECONDS);
+////                fail(); // Shouldn't have worked.
+////            } catch (TimeoutException e) {
+////                // Good!
+////            }
+////
+////            // Now, in the meantime, book all of rows E through G
+////            attemptBooking(user2Client, 1, date, 'E', 'G');
+////
+////            // Now, wait to see if we've received a sub response - we SHOULD have!
+////            try {
+////                ConcertInfoNotificationDTO subResponse = future.get(2, TimeUnit.SECONDS);
+////                // Should be 36 seats remaining.
+////                assertEquals(36, subResponse.getNumSeatsRemaining());
+////            } catch (TimeoutException e) {
+////                fail("Future took too long to return - probable error.");
+////            }
+////
+////        } finally {
+////            user2Client.close();
+////        }
+////
+////    }
+////
+////    /**
+////     * Tests that, if subscribed to notifications about a particular concert / date, a user won't receive notifications
+////     * about unrelated concerts / dates.
+////     */
+////    @Test
+////    public void testSubscriptionForDifferentConcert() throws ExecutionException, InterruptedException {
+////
+////        // Log in
+////        login(client, "testuser", "pa55word");
+////
+////        // Subscribe
+////        LocalDateTime date = LocalDateTime.of(2020, 2, 15, 20, 0, 0);
+////        ConcertInfoSubscriptionDTO subInfo = new ConcertInfoSubscriptionDTO(1, date, 50);
+////        Future<ConcertInfoNotificationDTO> future = client.target(WEB_SERVICE_URI + "/subscribe/concertInfo")
+////                .request().async().post(Entity.json(subInfo), ConcertInfoNotificationDTO.class);
+////
+////        // User 2 books out a whole theatre - but for a different concert.
+////        LocalDateTime user2Date = LocalDateTime.of(2019, 9, 12, 20, 0, 0);
+////        Client user2Client = ClientBuilder.newClient();
+////        try {
+////            // Make the booking
+////            login(user2Client, "testuser2", "pa55word");
+////            attemptBooking(user2Client, 2, user2Date, 'A', 'J');
+////
+////            // Now, wait two seconds to see if user 1 received a sub response - we shouldn't have (different concert / date).
+////            try {
+////                future.get(2, TimeUnit.SECONDS);
+////                fail(); // Shouldn't have worked.
+////            } catch (TimeoutException e) {
+////                // Good!
+////            }
+////
+////        } finally {
+////            user2Client.close();
+////        }
+////
+////    }
 
     // Helper methods
     // --------------------------------------------------------------------

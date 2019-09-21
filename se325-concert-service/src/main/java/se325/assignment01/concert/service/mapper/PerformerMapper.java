@@ -8,11 +8,11 @@ public class PerformerMapper {
 	private PerformerMapper() {
 	}
 	
-	public static PerformerDTO convert(Performer p) {
+	public static PerformerDTO toDTO(Performer p) {
 		return new PerformerDTO(p.getId(), p.getName(), p.getImageName(), p.getGenre(), p.getBlurb());
 	}
 	
-	public static Performer convert(PerformerDTO dto) {
+	public static Performer toStd(PerformerDTO dto) {
 		return new Performer(dto.getId(), dto.getName(), dto.getImageName(), dto.getGenre(), dto.getBlurb());
 	}
 	
