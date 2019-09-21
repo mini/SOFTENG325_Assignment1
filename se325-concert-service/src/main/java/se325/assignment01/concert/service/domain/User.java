@@ -1,5 +1,79 @@
 package se325.assignment01.concert.service.domain;
 
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
+import javax.persistence.Version;
+
+import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
+
+@Entity(name = "USERS")
 public class User {
 
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@Version
+	private Long version;
+
+	private String username;
+	private String password;
+
+	public User() {
+	}
+
+	public User(Long id, Long version, String username, String password) {
+		this.id = id;
+		this.version = version;
+		this.username = username;
+		this.password = password;
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+	public String getUsername() {
+		return username;
+	}
+
+	public void setUsername(String username) {
+		this.username = username;
+	}
+
+	public String getPassword() {
+		return password;
+	}
+
+	public void setPassword(String password) {
+		this.password = password;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o)
+			return true;
+
+		if (o == null || getClass() != o.getClass())
+			return false;
+
+		User user = (User) o;
+		return new EqualsBuilder().append(username, user.username).append(password, user.password).isEquals();
+	}
+
+	@Override
+	public int hashCode() {
+		return new HashCodeBuilder(17, 37).append(username).append(password).toHashCode();
+	}
 }
+
+// INSERT INTO USERS (ID, USERNAME, PASSWORD, VERSION) VALUES (1, 'testuser',
+// 'pa55word', 1);

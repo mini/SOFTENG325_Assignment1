@@ -30,7 +30,7 @@ public class ConcertUtils {
 
             // Get all concerts
             em.getTransaction().begin();
-            TypedQuery<Concert> query = em.createQuery("select c from Concert c", Concert.class);
+            TypedQuery<Concert> query = em.createQuery("select c from CONCERTS c", Concert.class);
             List<Concert> concerts = query.getResultList();
 
             // Get all dates for all concerts
