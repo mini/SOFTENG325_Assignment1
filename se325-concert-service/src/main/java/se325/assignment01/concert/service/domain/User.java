@@ -1,12 +1,18 @@
 package se325.assignment01.concert.service.domain;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.JoinTable;
+import javax.persistence.ManyToMany;
 import javax.persistence.Version;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
@@ -28,6 +34,11 @@ public class User {
 
 	@Column(unique = true)
 	private UUID sessionId;
+
+	@ManyToMany(cascade = CascadeType.PERSIST)
+	@JoinTable(joinColumns = @JoinColumn(name = "USER_ID"), inverseJoinColumns = { @JoinColumn(name = "SEAT_LABEL"),
+	        @JoinColumn(name = "SEAT_DATE") })
+	private Set<Seat> bookings = new HashSet<>();
 
 	public User() {
 	}
@@ -69,6 +80,14 @@ public class User {
 
 	public void setSessionId(UUID sessionId) {
 		this.sessionId = sessionId;
+	}
+
+	public Set<Seat> getBookings() {
+		return bookings;
+	}
+
+	public void setBookings(Set<Seat> bookings) {
+		this.bookings = bookings;
 	}
 
 	@Override

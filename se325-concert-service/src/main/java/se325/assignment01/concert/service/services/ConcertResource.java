@@ -1,5 +1,9 @@
 package se325.assignment01.concert.service.services;
 
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+import java.net.URI;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -7,6 +11,7 @@ import java.util.UUID;
 
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
+import javax.persistence.TypedQuery;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.CookieParam;
 import javax.ws.rs.DefaultValue;
@@ -32,13 +37,15 @@ import se325.assignment01.concert.common.dto.ConcertSummaryDTO;
 import se325.assignment01.concert.common.dto.PerformerDTO;
 import se325.assignment01.concert.common.dto.SeatDTO;
 import se325.assignment01.concert.common.dto.UserDTO;
+import se325.assignment01.concert.common.types.BookingStatus;
 import se325.assignment01.concert.service.domain.Concert;
 import se325.assignment01.concert.service.domain.Performer;
 import se325.assignment01.concert.service.domain.Seat;
-import se325.assignment01.concert.service.domain.SeatKey;
 import se325.assignment01.concert.service.domain.User;
+import se325.assignment01.concert.service.jaxrs.LocalDateTimeParam;
 import se325.assignment01.concert.service.mapper.ConcertMapper;
 import se325.assignment01.concert.service.mapper.PerformerMapper;
+import se325.assignment01.concert.service.mapper.SeatMapper;
 
 @Path("/concert-service")
 @Produces(MediaType.APPLICATION_JSON)
@@ -173,7 +180,7 @@ public class ConcertResource {
 			User user = null;
 			try {
 				user = em.createQuery("SELECT u FROM USERS u where u.username = :username", User.class)
-						.setParameter("username", attempt.getUsername()).getSingleResult();
+				        .setParameter("username", attempt.getUsername()).getSingleResult();
 			} catch (NoResultException e) {
 				// Username not found
 			}
@@ -191,7 +198,7 @@ public class ConcertResource {
 
 	@POST
 	@Path("/bookings")
-	public Response makeBooking(BookingRequestDTO bookingRequest, @CookieParam(AUTH_COOKIE) Cookie authCookie) {
+	public Response makeBooking(BookingRequestDTO request, @CookieParam(AUTH_COOKIE) Cookie authCookie) {
 		EntityManager em = createEM();
 		try {
 			User user = getLoggedInUser(authCookie, em);
@@ -199,20 +206,86 @@ public class ConcertResource {
 				return Response.status(Status.UNAUTHORIZED).build();
 			}
 
-			return Response.ok().build();
+			em.getTransaction().begin();
+
+			List<Seat> requestedSeats = em
+			        .createQuery("SELECT s FROM SEATS s WHERE s.label IN :label AND s.date = :date", Seat.class)
+			        .setParameter("label", request.getSeatLabels())
+			        .setParameter("date", request.getDate())
+			        .getResultList();
+
+			em.getTransaction().commit();
+
+			for (Seat seat : requestedSeats) {
+				if (seat.getIsBooked()) {
+					return Response.status(Status.FORBIDDEN).build();
+				}
+			}
+
+			em.getTransaction().begin();
+
+			em.createQuery("UPDATE SEATS s SET s.isBooked = true WHERE s.label IN :label AND s.date = :date")
+			        .setParameter("label", request.getSeatLabels())
+			        .setParameter("date", request.getDate())
+			        .executeUpdate();
+
+			em.getTransaction().commit();
+
+			return Response.created(URI.create("/concert-service/seats/" + request.getDate().format(ISO_LOCAL_DATE_TIME) + "?status=Booked")).build();
 		} finally {
 			em.close();
 		}
 	}
 
 	@GET
-	@Path("/seats/{time}")
-	public Response getSeatsForConcert(@PathParam("time") String time, @DefaultValue("Any") @QueryParam("status") String status) {
+	@Path("/bookings")
+	public Response getUserBookings(@CookieParam(AUTH_COOKIE) Cookie authCookie) {
+		EntityManager em = createEM();
+		try {
+			User user = getLoggedInUser(authCookie, em);
+			if (user == null) {
+				return Response.status(Status.UNAUTHORIZED).build();
+			}
+			em.refresh(user); // TODO Revisit
+			GenericEntity<Set<Seat>> out = new GenericEntity<Set<Seat>>(user.getBookings()) {};
+			return Response.ok(out).build();
+			
+		} finally {
+			em.close();
+		}
+	}
 
-		// Placeholder
-		GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(new HashSet<>()) {
-		};
-		return Response.ok(out).build();
+	@GET
+	@Path("/seats/{date}")
+	public Response getSeatStatus(@PathParam("date") String dateString, @DefaultValue("Any") @QueryParam("status") BookingStatus status) {
+		LocalDateTime date = new LocalDateTimeParam(dateString).getLocalDateTime();
+		EntityManager em = createEM();
+		try {
+			
+			em.getTransaction().begin();
+			TypedQuery<Seat> selectQuery;
+			if(status == BookingStatus.Any) { // TODO Use criteria methods
+				selectQuery = em.createQuery("SELECT s FROM SEATS s WHERE s.date = :date", Seat.class)
+								.setParameter("date", date);
+			} else {
+				selectQuery = em.createQuery("SELECT s FROM SEATS s WHERE s.date = :date AND isBooked = :status", Seat.class)
+								.setParameter("date", date)
+								.setParameter("status", status == BookingStatus.Booked);
+			}
+			List<Seat> seats = selectQuery.getResultList();
+			em.getTransaction().commit();	
+			
+			Set<SeatDTO> dtoSeats = new HashSet<>();
+			for (Seat seat : seats) {
+				dtoSeats.add(SeatMapper.toDTO(seat));
+			}
+			
+			GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(dtoSeats) {};
+			return Response.ok(out).build();
+			
+		} finally {
+			em.close();
+		}
 	}
 
 	@POST
@@ -238,12 +311,12 @@ public class ConcertResource {
 		if (authCookie == null) {
 			return null;
 		}
-		
+
 		User found = null;
 		em.getTransaction().begin();
 		try {
 			found = em.createQuery("SELECT u FROM USERS u where u.sessionId = :uuid", User.class)
-					.setParameter("username", UUID.fromString(authCookie.getValue())).getSingleResult();
+			        .setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult();
 		} catch (NoResultException e) {
 			// Not logged in
 		}
