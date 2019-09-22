@@ -1,18 +1,19 @@
 package se325.assignment01.concert.service.util;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import se325.assignment01.concert.service.domain.Concert;
-import se325.assignment01.concert.service.domain.Seat;
-import se325.assignment01.concert.service.services.ConcertApplication;
-import se325.assignment01.concert.service.services.PersistenceManager;
-
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import javax.persistence.EntityManager;
+import javax.persistence.TypedQuery;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import se325.assignment01.concert.service.domain.Concert;
+import se325.assignment01.concert.service.domain.Seat;
+import se325.assignment01.concert.service.services.PersistenceManager;
 
 public class ConcertUtils {
 

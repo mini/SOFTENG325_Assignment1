@@ -447,37 +447,37 @@ public class ConcertResourceIT {
         Response response = client.target(WEB_SERVICE_URI + "/bookings").request().get();
         assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     }
-//
-//    /**
-//     * Tests that a 400 error is returned when trying to book seats for a date on which a given concert is not scheduled.
-//     */
-//    @Test
-//    public void testAttemptBookingWrongDate() {
-//        // Log in
-//        login(client, "testuser", "pa55word");
-//
-//        // Attempt booking - should fail with bad request
-//        Response response = attemptBooking(client, 1,
-//                LocalDateTime.of(2020, 3, 15, 20, 0, 0),
-//                "C5", "C6");
-//        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-//    }
-//
-//    /**
-//     * Tests that a 400 error is returned when trying to book seats for a nonexistent concert.
-//     */
-//    @Test
-//    public void testAttemptBookingIncorrectConcertId() {
-//        // Log in
-//        login(client, "testuser", "pa55word");
-//
-//        // Attempt booking - should fail with bad request
-//        Response response = attemptBooking(client, 100,
-//                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
-//                "C5", "C6");
-//        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-//    }
-//
+
+    /**
+     * Tests that a 400 error is returned when trying to book seats for a date on which a given concert is not scheduled.
+     */
+    @Test
+    public void testAttemptBookingWrongDate() {
+        // Log in
+        login(client, "testuser", "pa55word");
+
+        // Attempt booking - should fail with bad request
+        Response response = attemptBooking(client, 1,
+                LocalDateTime.of(2020, 3, 15, 20, 0, 0),
+                "C5", "C6");
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    }
+
+    /**
+     * Tests that a 400 error is returned when trying to book seats for a nonexistent concert.
+     */
+    @Test
+    public void testAttemptBookingIncorrectConcertId() {
+        // Log in
+        login(client, "testuser", "pa55word");
+
+        // Attempt booking - should fail with bad request
+        Response response = attemptBooking(client, 100,
+                LocalDateTime.of(2020, 2, 15, 20, 0, 0),
+                "C5", "C6");
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    }
+
 //    /**
 //     * Tests that a 403 error is returned when trying to book a set of seats, all of which have already been booked.
 //     * Also makes sure that the original booker of those seats retains those seats, and the new user does not.

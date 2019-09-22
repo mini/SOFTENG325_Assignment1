@@ -3,8 +3,6 @@ package se325.assignment01.concert.service.jaxrs;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-import se325.assignment01.concert.service.mapper.ConcertMapper;
-
 /**
  * This class allows us to receive {@link LocalDateTime} instances as query or path parameters. For example:
  * <code>

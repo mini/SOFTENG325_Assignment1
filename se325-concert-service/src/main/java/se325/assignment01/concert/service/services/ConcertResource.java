@@ -207,6 +207,12 @@ public class ConcertResource {
 			}
 
 			em.getTransaction().begin();
+			
+			Concert concert = em.find(Concert.class, request.getConcertId());
+			if(concert == null || !concert.getDates().contains(request.getDate())) {
+				em.getTransaction().commit();
+				return Response.status(Status.BAD_REQUEST).build();
+			}
 
 			List<Seat> requestedSeats = em
 			        .createQuery("SELECT s FROM SEATS s WHERE s.label IN :label AND s.date = :date", Seat.class)
@@ -214,15 +220,13 @@ public class ConcertResource {
 			        .setParameter("date", request.getDate())
 			        .getResultList();
 
-			em.getTransaction().commit();
 
 			for (Seat seat : requestedSeats) {
 				if (seat.getIsBooked()) {
+					em.getTransaction().commit();
 					return Response.status(Status.FORBIDDEN).build();
 				}
 			}
-
-			em.getTransaction().begin();
 
 			em.createQuery("UPDATE SEATS s SET s.isBooked = true WHERE s.label IN :label AND s.date = :date")
 			        .setParameter("label", request.getSeatLabels())

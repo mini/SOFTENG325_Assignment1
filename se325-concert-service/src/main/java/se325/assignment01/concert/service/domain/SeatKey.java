@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 public class SeatKey implements Serializable {
+	private static final long serialVersionUID = -5504649016409889372L;
 	private String label;
 	private LocalDateTime date;
 
