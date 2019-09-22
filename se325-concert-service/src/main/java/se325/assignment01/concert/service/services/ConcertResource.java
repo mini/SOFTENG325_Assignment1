@@ -3,9 +3,12 @@ package se325.assignment01.concert.service.services;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.CookieParam;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -13,16 +16,27 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import se325.assignment01.concert.common.dto.BookingRequestDTO;
 import se325.assignment01.concert.common.dto.ConcertDTO;
 import se325.assignment01.concert.common.dto.ConcertSummaryDTO;
 import se325.assignment01.concert.common.dto.PerformerDTO;
+import se325.assignment01.concert.common.dto.SeatDTO;
+import se325.assignment01.concert.common.dto.UserDTO;
 import se325.assignment01.concert.service.domain.Concert;
 import se325.assignment01.concert.service.domain.Performer;
+import se325.assignment01.concert.service.domain.Seat;
+import se325.assignment01.concert.service.domain.SeatKey;
+import se325.assignment01.concert.service.domain.User;
 import se325.assignment01.concert.service.mapper.ConcertMapper;
 import se325.assignment01.concert.service.mapper.PerformerMapper;
 
@@ -30,6 +44,9 @@ import se325.assignment01.concert.service.mapper.PerformerMapper;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class ConcertResource {
+
+	public static final String AUTH_COOKIE = "auth";
+	private static final Logger LOGGER = LoggerFactory.getLogger(ConcertResource.class);
 
 	@GET
 	@Path("/concerts")
@@ -149,23 +166,53 @@ public class ConcertResource {
 
 	@POST
 	@Path("/login")
-	public Response login() {
+	public Response login(UserDTO attempt) {
+		EntityManager em = createEM();
+		try {
+			em.getTransaction().begin();
+			User user = null;
+			try {
+				user = em.createQuery("SELECT u FROM USERS u where u.username = :username", User.class)
+						.setParameter("username", attempt.getUsername()).getSingleResult();
+			} catch (NoResultException e) {
+				// Username not found
+			}
+			em.getTransaction().commit();
 
-		return null;
+			if (user == null || !user.getPassword().equals(attempt.getPassword())) {
+				return Response.status(Status.UNAUTHORIZED).build();
+			}
+
+			return Response.ok().cookie(newSession(user, em)).build();
+		} finally {
+			em.close();
+		}
 	}
 
 	@POST
 	@Path("/bookings")
-	public Response makeBooking() {
+	public Response makeBooking(BookingRequestDTO bookingRequest, @CookieParam(AUTH_COOKIE) Cookie authCookie) {
+		EntityManager em = createEM();
+		try {
+			User user = getLoggedInUser(authCookie, em);
+			if (user == null) {
+				return Response.status(Status.UNAUTHORIZED).build();
+			}
 
-		return null;
+			return Response.ok().build();
+		} finally {
+			em.close();
+		}
 	}
 
 	@GET
 	@Path("/seats/{time}")
 	public Response getSeatsForConcert(@PathParam("time") String time, @DefaultValue("Any") @QueryParam("status") String status) {
 
-		return null;
+		// Placeholder
+		GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(new HashSet<>()) {
+		};
+		return Response.ok(out).build();
 	}
 
 	@POST
@@ -177,6 +224,31 @@ public class ConcertResource {
 
 	private EntityManager createEM() {
 		return PersistenceManager.instance().createEntityManager();
+	}
+
+	private NewCookie newSession(User user, EntityManager em) {
+		user.setSessionId(UUID.randomUUID());
+		em.getTransaction().begin();
+		em.merge(user);
+		em.getTransaction().commit();
+		return new NewCookie(AUTH_COOKIE, user.getSessionId().toString());
+	}
+
+	private User getLoggedInUser(Cookie authCookie, EntityManager em) {
+		if (authCookie == null) {
+			return null;
+		}
+		
+		User found = null;
+		em.getTransaction().begin();
+		try {
+			found = em.createQuery("SELECT u FROM USERS u where u.sessionId = :uuid", User.class)
+					.setParameter("username", UUID.fromString(authCookie.getValue())).getSingleResult();
+		} catch (NoResultException e) {
+			// Not logged in
+		}
+		em.getTransaction().commit();
+		return found;
 	}
 
 }

@@ -1,10 +1,12 @@
 package se325.assignment01.concert.service.domain;
 
+import java.util.UUID;
+
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
-import javax.persistence.Table;
 import javax.persistence.Version;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
@@ -20,8 +22,12 @@ public class User {
 	@Version
 	private Long version;
 
+	@Column(unique = true)
 	private String username;
 	private String password;
+
+	@Column(unique = true)
+	private UUID sessionId;
 
 	public User() {
 	}
@@ -57,6 +63,14 @@ public class User {
 		this.password = password;
 	}
 
+	public UUID getSessionId() {
+		return sessionId;
+	}
+
+	public void setSessionId(UUID sessionId) {
+		this.sessionId = sessionId;
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o)
@@ -74,6 +88,3 @@ public class User {
 		return new HashCodeBuilder(17, 37).append(username).append(password).toHashCode();
 	}
 }
-
-// INSERT INTO USERS (ID, USERNAME, PASSWORD, VERSION) VALUES (1, 'testuser',
-// 'pa55word', 1);

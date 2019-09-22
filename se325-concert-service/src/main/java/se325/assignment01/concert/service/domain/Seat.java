@@ -1,6 +1,5 @@
 package se325.assignment01.concert.service.domain;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -8,7 +7,6 @@ import java.util.Objects;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
-import javax.persistence.Table;
 
 @Entity(name = "SEATS")
 @IdClass(SeatKey.class)
@@ -19,10 +17,10 @@ public class Seat {
 	private boolean isBooked;
 	@Id
 	private LocalDateTime date;
-	@Id
 	private BigDecimal price;
 
-	public Seat() {}
+	public Seat() {
+	}
 
 	public Seat(String label, boolean isBooked, LocalDateTime date, BigDecimal price) {
 		this.label = label;
@@ -79,29 +77,4 @@ public class Seat {
 		Seat other = (Seat) obj;
 		return Objects.equals(date, other.date) && Objects.equals(label, other.label) && Objects.equals(price, other.price);
 	}
-	
-}
-
-
-class SeatKey implements Serializable{
-    private String label;
-    private LocalDateTime date;
-    private BigDecimal price;
-    
-	@Override
-	public int hashCode() {
-		return Objects.hash(date, label, price);
-	}
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj) {
-			return true;
-		}
-		if (!(obj instanceof SeatKey)) {
-			return false;
-		}
-		SeatKey other = (SeatKey) obj;
-		return Objects.equals(date, other.date) && Objects.equals(label, other.label) && Objects.equals(price, other.price);
-	}
-   
 }
