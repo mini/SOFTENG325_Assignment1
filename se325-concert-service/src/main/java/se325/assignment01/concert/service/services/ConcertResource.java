@@ -1,7 +1,5 @@
 package se325.assignment01.concert.service.services;
 
-import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -31,6 +29,7 @@ import javax.ws.rs.core.Response.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import se325.assignment01.concert.common.dto.BookingDTO;
 import se325.assignment01.concert.common.dto.BookingRequestDTO;
 import se325.assignment01.concert.common.dto.ConcertDTO;
 import se325.assignment01.concert.common.dto.ConcertSummaryDTO;
@@ -38,11 +37,13 @@ import se325.assignment01.concert.common.dto.PerformerDTO;
 import se325.assignment01.concert.common.dto.SeatDTO;
 import se325.assignment01.concert.common.dto.UserDTO;
 import se325.assignment01.concert.common.types.BookingStatus;
+import se325.assignment01.concert.service.domain.Booking;
 import se325.assignment01.concert.service.domain.Concert;
 import se325.assignment01.concert.service.domain.Performer;
 import se325.assignment01.concert.service.domain.Seat;
 import se325.assignment01.concert.service.domain.User;
 import se325.assignment01.concert.service.jaxrs.LocalDateTimeParam;
+import se325.assignment01.concert.service.mapper.BookingMapper;
 import se325.assignment01.concert.service.mapper.ConcertMapper;
 import se325.assignment01.concert.service.mapper.PerformerMapper;
 import se325.assignment01.concert.service.mapper.SeatMapper;
@@ -180,7 +181,7 @@ public class ConcertResource {
 			User user = null;
 			try {
 				user = em.createQuery("SELECT u FROM USERS u where u.username = :username", User.class)
-				        .setParameter("username", attempt.getUsername()).getSingleResult();
+						.setParameter("username", attempt.getUsername()).getSingleResult();
 			} catch (NoResultException e) {
 				// Username not found
 			}
@@ -207,35 +208,33 @@ public class ConcertResource {
 			}
 
 			em.getTransaction().begin();
-			
+
 			Concert concert = em.find(Concert.class, request.getConcertId());
-			if(concert == null || !concert.getDates().contains(request.getDate())) {
+			if (concert == null || !concert.getDates().contains(request.getDate())) {
 				em.getTransaction().commit();
 				return Response.status(Status.BAD_REQUEST).build();
 			}
 
 			List<Seat> requestedSeats = em
-			        .createQuery("SELECT s FROM SEATS s WHERE s.label IN :label AND s.date = :date", Seat.class)
-			        .setParameter("label", request.getSeatLabels())
-			        .setParameter("date", request.getDate())
-			        .getResultList();
+					.createQuery("SELECT s FROM SEATS s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
+					.setParameter("label", request.getSeatLabels())
+					.setParameter("date", request.getDate())
+					.getResultList();
 
-
-			for (Seat seat : requestedSeats) {
-				if (seat.getIsBooked()) {
-					em.getTransaction().commit();
-					return Response.status(Status.FORBIDDEN).build();
-				}
+			if (request.getSeatLabels().size() != requestedSeats.size()) {
+				em.getTransaction().commit();
+				return Response.status(Status.FORBIDDEN).build();
 			}
 
-			em.createQuery("UPDATE SEATS s SET s.isBooked = true WHERE s.label IN :label AND s.date = :date")
-			        .setParameter("label", request.getSeatLabels())
-			        .setParameter("date", request.getDate())
-			        .executeUpdate();
-
+			Booking booking = new Booking(user, request.getConcertId(), request.getDate());
+			booking.getSeats().addAll(requestedSeats);
+			for (Seat seat : requestedSeats) {
+				seat.setIsBooked(true);
+			}
+			em.persist(booking);
 			em.getTransaction().commit();
 
-			return Response.created(URI.create("/concert-service/seats/" + request.getDate().format(ISO_LOCAL_DATE_TIME) + "?status=Booked")).build();
+			return Response.created(URI.create("/concert-service/bookings/" + booking.getId())).build();
 		} finally {
 			em.close();
 		}
@@ -243,17 +242,46 @@ public class ConcertResource {
 
 	@GET
 	@Path("/bookings")
-	public Response getUserBookings(@CookieParam(AUTH_COOKIE) Cookie authCookie) {
+	public Response getUsersBookings(@CookieParam(AUTH_COOKIE) Cookie authCookie) {
 		EntityManager em = createEM();
 		try {
 			User user = getLoggedInUser(authCookie, em);
 			if (user == null) {
 				return Response.status(Status.UNAUTHORIZED).build();
 			}
-			em.refresh(user); // TODO Revisit
-			GenericEntity<Set<Seat>> out = new GenericEntity<Set<Seat>>(user.getBookings()) {};
+
+			Set<BookingDTO> dtoBookings = new HashSet<>();
+			for (Booking b : user.getBookings()) {
+				dtoBookings.add(BookingMapper.toDTO(b));
+			}
+
+			GenericEntity<Set<BookingDTO>> out = new GenericEntity<Set<BookingDTO>>(dtoBookings) {
+			};
 			return Response.ok(out).build();
+
+		} finally {
+			em.close();
+		}
+	}
+
+	@GET
+	@Path("/bookings/{id}")
+	public Response getBooking(@PathParam("id") Long id, @CookieParam(AUTH_COOKIE) Cookie authCookie) {
+		EntityManager em = createEM();
+		try {
+			User user = getLoggedInUser(authCookie, em);
+			if (user == null) {
+				return Response.status(Status.UNAUTHORIZED).build();
+			}
 			
+			em.getTransaction().begin();
+			Booking booking = em.find(Booking.class, id);
+			em.getTransaction().commit();
+			if(!booking.getUser().equals(user)) {
+				return Response.status(Status.FORBIDDEN).build();
+			}
+
+			return Response.ok(BookingMapper.toDTO(booking)).build();
 		} finally {
 			em.close();
 		}
@@ -265,28 +293,29 @@ public class ConcertResource {
 		LocalDateTime date = new LocalDateTimeParam(dateString).getLocalDateTime();
 		EntityManager em = createEM();
 		try {
-			
+
 			em.getTransaction().begin();
 			TypedQuery<Seat> selectQuery;
-			if(status == BookingStatus.Any) { // TODO Use criteria methods
+			if (status == BookingStatus.Any) { // TODO Use criteria methods
 				selectQuery = em.createQuery("SELECT s FROM SEATS s WHERE s.date = :date", Seat.class)
-								.setParameter("date", date);
+						.setParameter("date", date);
 			} else {
 				selectQuery = em.createQuery("SELECT s FROM SEATS s WHERE s.date = :date AND isBooked = :status", Seat.class)
-								.setParameter("date", date)
-								.setParameter("status", status == BookingStatus.Booked);
+						.setParameter("date", date)
+						.setParameter("status", status == BookingStatus.Booked);
 			}
 			List<Seat> seats = selectQuery.getResultList();
-			em.getTransaction().commit();	
-			
+			em.getTransaction().commit();
+
 			Set<SeatDTO> dtoSeats = new HashSet<>();
 			for (Seat seat : seats) {
 				dtoSeats.add(SeatMapper.toDTO(seat));
 			}
-			
-			GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(dtoSeats) {};
+
+			GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(dtoSeats) {
+			};
 			return Response.ok(out).build();
-			
+
 		} finally {
 			em.close();
 		}
@@ -320,7 +349,7 @@ public class ConcertResource {
 		em.getTransaction().begin();
 		try {
 			found = em.createQuery("SELECT u FROM USERS u where u.sessionId = :uuid", User.class)
-			        .setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult();
+					.setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult();
 		} catch (NoResultException e) {
 			// Not logged in
 		}

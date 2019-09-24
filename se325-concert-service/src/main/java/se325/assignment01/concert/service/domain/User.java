@@ -10,9 +10,7 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
-import javax.persistence.JoinColumn;
-import javax.persistence.JoinTable;
-import javax.persistence.ManyToMany;
+import javax.persistence.OneToMany;
 import javax.persistence.Version;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
@@ -35,16 +33,13 @@ public class User {
 	@Column(unique = true)
 	private UUID sessionId;
 
-	@ManyToMany(cascade = CascadeType.PERSIST)
-	@JoinTable(joinColumns = @JoinColumn(name = "USER_ID"), inverseJoinColumns = { @JoinColumn(name = "SEAT_LABEL"),
-	        @JoinColumn(name = "SEAT_DATE") })
-	private Set<Seat> bookings = new HashSet<>();
+	@OneToMany(cascade = CascadeType.PERSIST, mappedBy = "user")
+	private Set<Booking> bookings = new HashSet<>();
 
 	public User() {
 	}
 
-	public User(Long id, Long version, String username, String password) {
-		this.id = id;
+	public User(Long version, String username, String password) {
 		this.version = version;
 		this.username = username;
 		this.password = password;
@@ -82,11 +77,11 @@ public class User {
 		this.sessionId = sessionId;
 	}
 
-	public Set<Seat> getBookings() {
+	public Set<Booking> getBookings() {
 		return bookings;
 	}
 
-	public void setBookings(Set<Seat> bookings) {
+	public void setBookings(Set<Booking> bookings) {
 		this.bookings = bookings;
 	}
 
