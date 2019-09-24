@@ -62,7 +62,7 @@ public class ConcertResource {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Concert> concerts = em.createQuery("SELECT c FROM CONCERTS c", Concert.class).getResultList();
+			List<Concert> concerts = em.createQuery("SELECT c FROM Concert c", Concert.class).getResultList();
 			em.getTransaction().commit();
 
 			if (concerts.isEmpty()) {
@@ -107,7 +107,7 @@ public class ConcertResource {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Concert> concerts = em.createQuery("SELECT c FROM CONCERTS c", Concert.class).getResultList();
+			List<Concert> concerts = em.createQuery("SELECT c FROM Concert c", Concert.class).getResultList();
 			em.getTransaction().commit();
 
 			if (concerts.isEmpty()) {
@@ -133,7 +133,7 @@ public class ConcertResource {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Performer> concerts = em.createQuery("SELECT p FROM PERFORMERS p", Performer.class).getResultList();
+			List<Performer> concerts = em.createQuery("SELECT p FROM Performer p", Performer.class).getResultList();
 			em.getTransaction().commit();
 
 			if (concerts.isEmpty()) {
@@ -180,7 +180,7 @@ public class ConcertResource {
 			em.getTransaction().begin();
 			User user = null;
 			try {
-				user = em.createQuery("SELECT u FROM USERS u where u.username = :username", User.class)
+				user = em.createQuery("SELECT u FROM User u where u.username = :username", User.class)
 						.setParameter("username", attempt.getUsername()).getSingleResult();
 			} catch (NoResultException e) {
 				// Username not found
@@ -216,7 +216,7 @@ public class ConcertResource {
 			}
 
 			List<Seat> requestedSeats = em
-					.createQuery("SELECT s FROM SEATS s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
+					.createQuery("SELECT s FROM Seat s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
 					.setParameter("label", request.getSeatLabels())
 					.setParameter("date", request.getDate())
 					.getResultList();
@@ -297,10 +297,10 @@ public class ConcertResource {
 			em.getTransaction().begin();
 			TypedQuery<Seat> selectQuery;
 			if (status == BookingStatus.Any) { // TODO Use criteria methods
-				selectQuery = em.createQuery("SELECT s FROM SEATS s WHERE s.date = :date", Seat.class)
+				selectQuery = em.createQuery("SELECT s FROM Seat s WHERE s.date = :date", Seat.class)
 						.setParameter("date", date);
 			} else {
-				selectQuery = em.createQuery("SELECT s FROM SEATS s WHERE s.date = :date AND isBooked = :status", Seat.class)
+				selectQuery = em.createQuery("SELECT s FROM Seat s WHERE s.date = :date AND isBooked = :status", Seat.class)
 						.setParameter("date", date)
 						.setParameter("status", status == BookingStatus.Booked);
 			}
@@ -348,7 +348,7 @@ public class ConcertResource {
 		User found = null;
 		em.getTransaction().begin();
 		try {
-			found = em.createQuery("SELECT u FROM USERS u where u.sessionId = :uuid", User.class)
+			found = em.createQuery("SELECT u FROM User u where u.sessionId = :uuid", User.class)
 					.setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult();
 		} catch (NoResultException e) {
 			// Not logged in

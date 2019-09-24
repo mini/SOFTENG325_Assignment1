@@ -7,13 +7,15 @@ import javax.persistence.Enumerated;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.Table;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
 import se325.assignment01.concert.common.types.Genre;
 
-@Entity(name = "PERFORMERS")
+@Entity
+@Table(name = "PERFORMERS")
 public class Performer {
 
 	@Id

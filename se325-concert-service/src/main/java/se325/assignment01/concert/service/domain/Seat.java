@@ -7,8 +7,10 @@ import java.util.Objects;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
+import javax.persistence.Table;
 
-@Entity(name = "SEATS")
+@Entity
+@Table(name = "SEATS")
 @IdClass(SeatKey.class)
 public class Seat {
 
