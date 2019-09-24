@@ -36,14 +36,6 @@ public class Performer {
 	public Performer() {
 	}
 
-	public Performer(Long id, String name, String imageName, Genre genre, String blurb) {
-		this.id = id;
-		this.name = name;
-		this.imageName = imageName;
-		this.genre = genre;
-		this.blurb = blurb;
-	}
-
 	public Long getId() {
 		return id;
 	}
@@ -100,5 +92,4 @@ public class Performer {
 	public int hashCode() {
 		return new HashCodeBuilder(17, 37).append(id).append(name).append(imageName).append(genre).toHashCode();
 	}
-
 }

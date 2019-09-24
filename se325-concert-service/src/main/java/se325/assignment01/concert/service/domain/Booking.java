@@ -3,6 +3,7 @@ package se325.assignment01.concert.service.domain;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Entity;
@@ -78,6 +79,21 @@ public class Booking {
 	public void setSeats(List<Seat> seats) {
 		this.seats = seats;
 	}
-	
 
+	@Override
+	public int hashCode() {
+		return Objects.hash(concertId, date, id, user);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof Booking)) {
+			return false;
+		}
+		Booking other = (Booking) obj;
+		return concertId == other.concertId && Objects.equals(date, other.date) && Objects.equals(id, other.id) && Objects.equals(user, other.user);
+	}
 }

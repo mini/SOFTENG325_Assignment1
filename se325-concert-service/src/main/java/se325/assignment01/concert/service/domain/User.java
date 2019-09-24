@@ -41,12 +41,6 @@ public class User {
 	public User() {
 	}
 
-	public User(Long version, String username, String password) {
-		this.version = version;
-		this.username = username;
-		this.password = password;
-	}
-
 	public Long getId() {
 		return id;
 	}

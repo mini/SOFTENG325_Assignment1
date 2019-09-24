@@ -2,6 +2,7 @@ package se325.assignment01.concert.service.domain;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import javax.persistence.CascadeType;
@@ -28,7 +29,7 @@ public class Concert {
 
 	@Column(name = "IMAGE_NAME")
 	private String imageName;
-	
+
 	@Column(columnDefinition = "TEXT")
 	private String blurb;
 
@@ -42,13 +43,6 @@ public class Concert {
 	private Set<Performer> performers = new HashSet<>();
 
 	public Concert() {
-	}
-
-	public Concert(Long id, String title, String imageName, String blurb) {
-		this.id = id;
-		this.title = title;
-		this.imageName = imageName;
-		this.blurb = blurb;
 	}
 
 	public Long getId() {
@@ -97,6 +91,23 @@ public class Concert {
 
 	public void setPerformers(Set<Performer> performers) {
 		this.performers = performers;
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(dates, id, title);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof Concert)) {
+			return false;
+		}
+		Concert other = (Concert) obj;
+		return Objects.equals(dates, other.dates) && Objects.equals(id, other.id) && Objects.equals(title, other.title);
 	}
 
 }

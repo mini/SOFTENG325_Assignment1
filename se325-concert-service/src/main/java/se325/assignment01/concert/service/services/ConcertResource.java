@@ -33,10 +33,6 @@ import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import org.apache.commons.lang3.tuple.Pair;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import se325.assignment01.concert.common.dto.BookingDTO;
 import se325.assignment01.concert.common.dto.BookingRequestDTO;
 import se325.assignment01.concert.common.dto.ConcertDTO;
@@ -66,11 +62,12 @@ import se325.assignment01.concert.service.util.TheatreLayout;
 public class ConcertResource {
 
 	public static final String AUTH_COOKIE = "auth";
-	private static final Logger LOGGER = LoggerFactory.getLogger(ConcertResource.class);
 
-    private static ConcurrentHashMap<Pair<Long, LocalDateTime>, LinkedList<ConcertSubscription>> subs = new ConcurrentHashMap<>();
-    private ExecutorService threadPool = Executors.newSingleThreadExecutor();
-	
+	private static final ConcurrentHashMap<LocalDateTime, LinkedList<ConcertSubscription>> subscriptions = new ConcurrentHashMap<>();
+	private static final ExecutorService threadPool = Executors.newSingleThreadExecutor();
+
+	// First 5 methods are pretty much English
+
 	@GET
 	@Path("/concerts")
 	public Response getAllConcerts() {
@@ -85,12 +82,9 @@ public class ConcertResource {
 			}
 
 			Set<ConcertDTO> dtoConcerts = new HashSet<>();
-			for (Concert c : concerts) {
-				dtoConcerts.add(ConcertMapper.toDTO(c));
-			}
+			concerts.forEach(concert -> dtoConcerts.add(ConcertMapper.toDTO(concert)));
 
-			GenericEntity<Set<ConcertDTO>> out = new GenericEntity<Set<ConcertDTO>>(dtoConcerts) {
-			};
+			GenericEntity<Set<ConcertDTO>> out = new GenericEntity<Set<ConcertDTO>>(dtoConcerts) {};
 			return Response.ok(out).build();
 		} finally {
 			em.close();
@@ -109,8 +103,7 @@ public class ConcertResource {
 			if (concert == null) {
 				return Response.status(Status.NOT_FOUND).build();
 			}
-			ConcertDTO dto = ConcertMapper.toDTO(concert);
-			return Response.ok(dto).build();
+			return Response.ok(ConcertMapper.toDTO(concert)).build();
 		} finally {
 			em.close();
 		}
@@ -130,12 +123,9 @@ public class ConcertResource {
 			}
 
 			Set<ConcertSummaryDTO> dtoSummaries = new HashSet<>();
-			for (Concert c : concerts) {
-				dtoSummaries.add(ConcertMapper.toSummaryDTO(c));
-			}
+			concerts.forEach(concert -> dtoSummaries.add(ConcertMapper.toSummaryDTO(concert)));
 
-			GenericEntity<Set<ConcertSummaryDTO>> out = new GenericEntity<Set<ConcertSummaryDTO>>(dtoSummaries) {
-			};
+			GenericEntity<Set<ConcertSummaryDTO>> out = new GenericEntity<Set<ConcertSummaryDTO>>(dtoSummaries) {};
 			return Response.ok(out).build();
 		} finally {
 			em.close();
@@ -148,20 +138,17 @@ public class ConcertResource {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Performer> concerts = em.createQuery("SELECT p FROM Performer p", Performer.class).getResultList();
+			List<Performer> performers = em.createQuery("SELECT p FROM Performer p", Performer.class).getResultList();
 			em.getTransaction().commit();
 
-			if (concerts.isEmpty()) {
+			if (performers.isEmpty()) {
 				return Response.noContent().build();
 			}
 
 			Set<PerformerDTO> dtoPerformers = new HashSet<>();
-			for (Performer p : concerts) {
-				dtoPerformers.add(PerformerMapper.toDTO(p));
-			}
+			performers.forEach(performer -> dtoPerformers.add(PerformerMapper.toDTO(performer)));
 
-			GenericEntity<Set<PerformerDTO>> out = new GenericEntity<Set<PerformerDTO>>(dtoPerformers) {
-			};
+			GenericEntity<Set<PerformerDTO>> out = new GenericEntity<Set<PerformerDTO>>(dtoPerformers) {};
 			return Response.ok(out).build();
 		} finally {
 			em.close();
@@ -180,8 +167,7 @@ public class ConcertResource {
 			if (performer == null) {
 				return Response.status(Status.NOT_FOUND).build();
 			}
-			PerformerDTO dto = PerformerMapper.toDTO(performer);
-			return Response.ok(dto).build();
+			return Response.ok(PerformerMapper.toDTO(performer)).build();
 		} finally {
 			em.close();
 		}
@@ -193,17 +179,16 @@ public class ConcertResource {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			User user = null;
+			User user;
 			try {
-				user = em.createQuery("SELECT u FROM User u where u.username = :username", User.class)
-						.setParameter("username", attempt.getUsername()).getSingleResult();
-			} catch (NoResultException e) {
-				// Username not found
-			}
-			em.getTransaction().commit();
-
-			if (user == null || !user.getPassword().equals(attempt.getPassword())) {
+				user = em.createQuery("SELECT u FROM User u where u.username = :username AND u.password = :password", User.class)
+						.setParameter("username", attempt.getUsername())
+						.setParameter("password", attempt.getPassword())
+						.getSingleResult();
+			} catch (NoResultException e) { // No username-password match
 				return Response.status(Status.UNAUTHORIZED).build();
+			} finally {
+				em.getTransaction().commit();
 			}
 
 			return Response.ok().cookie(newSession(user, em)).build();
@@ -230,12 +215,8 @@ public class ConcertResource {
 				return Response.status(Status.BAD_REQUEST).build();
 			}
 
-			int freeSeats = (int)(long)em
-					.createQuery("SELECT COUNT(s) FROM Seat s WHERE s.date = :date AND s.isBooked = false", Long.class)
-					.setParameter("date", request.getDate())
-					.getSingleResult();
-			List<Seat> freeSeatsFound = em
-					.createQuery("SELECT s FROM Seat s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
+
+			List<Seat> freeSeatsFound = em.createQuery("SELECT s FROM Seat s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
 					.setParameter("label", request.getSeatLabels())
 					.setParameter("date", request.getDate())
 					.getResultList();
@@ -245,14 +226,17 @@ public class ConcertResource {
 				return Response.status(Status.FORBIDDEN).build();
 			}
 			
-			System.out.println("booked " + freeSeatsFound.size() + " left " + (freeSeats - freeSeatsFound.size()));
-			checkSubscribers(Pair.of(request.getConcertId(), request.getDate()), freeSeats - freeSeatsFound.size());
+			int freeSeats = em.createQuery("SELECT COUNT(s) FROM Seat s WHERE s.date = :date AND s.isBooked = false", Long.class)
+					.setParameter("date", request.getDate())
+					.getSingleResult()
+					.intValue();
+			checkSubscribers(request.getDate(), freeSeats - freeSeatsFound.size());
+
 			
 			Booking booking = new Booking(user, request.getConcertId(), request.getDate());
 			booking.getSeats().addAll(freeSeatsFound);
-			for (Seat seat : freeSeatsFound) {
-				seat.setIsBooked(true);
-			}
+			freeSeatsFound.forEach(seat -> seat.setIsBooked(true));
+
 			em.persist(booking);
 			em.getTransaction().commit();
 
@@ -273,14 +257,10 @@ public class ConcertResource {
 			}
 
 			Set<BookingDTO> dtoBookings = new HashSet<>();
-			for (Booking b : user.getBookings()) {
-				dtoBookings.add(BookingMapper.toDTO(b));
-			}
+			user.getBookings().forEach(booking -> dtoBookings.add(BookingMapper.toDTO(booking)));
 
-			GenericEntity<Set<BookingDTO>> out = new GenericEntity<Set<BookingDTO>>(dtoBookings) {
-			};
+			GenericEntity<Set<BookingDTO>> out = new GenericEntity<Set<BookingDTO>>(dtoBookings) {};
 			return Response.ok(out).build();
-
 		} finally {
 			em.close();
 		}
@@ -295,11 +275,12 @@ public class ConcertResource {
 			if (user == null) {
 				return Response.status(Status.UNAUTHORIZED).build();
 			}
-			
+
 			em.getTransaction().begin();
 			Booking booking = em.find(Booking.class, id);
 			em.getTransaction().commit();
-			if(!booking.getUser().equals(user)) {
+
+			if (!booking.getUser().equals(user)) {
 				return Response.status(Status.FORBIDDEN).build();
 			}
 
@@ -318,7 +299,7 @@ public class ConcertResource {
 
 			em.getTransaction().begin();
 			TypedQuery<Seat> selectQuery;
-			if (status == BookingStatus.Any) { // TODO Use criteria methods
+			if (status == BookingStatus.Any) {
 				selectQuery = em.createQuery("SELECT s FROM Seat s WHERE s.date = :date", Seat.class)
 						.setParameter("date", date);
 			} else {
@@ -330,12 +311,9 @@ public class ConcertResource {
 			em.getTransaction().commit();
 
 			Set<SeatDTO> dtoSeats = new HashSet<>();
-			for (Seat seat : seats) {
-				dtoSeats.add(SeatMapper.toDTO(seat));
-			}
+			seats.forEach(seat -> dtoSeats.add(SeatMapper.toDTO(seat)));
 
-			GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(dtoSeats) {
-			};
+			GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(dtoSeats) {};
 			return Response.ok(out).build();
 
 		} finally {
@@ -353,9 +331,9 @@ public class ConcertResource {
 				reponse.resume(Response.status(Status.UNAUTHORIZED).build());
 				return;
 			}
-			
+
 			em.getTransaction().begin();
-			
+
 			Concert concert = em.find(Concert.class, request.getConcertId());
 			if (concert == null || !concert.getDates().contains(request.getDate())) {
 				em.getTransaction().commit();
@@ -366,23 +344,30 @@ public class ConcertResource {
 		} finally {
 			em.close();
 		}
-		Pair<Long, LocalDateTime> key = Pair.of(request.getConcertId(), request.getDate());
-		synchronized (subs) {
-			if (!subs.contains(key)) {
-				System.out.println("new list");
-				subs.put(key, new LinkedList<>());
+		synchronized (subscriptions) { // Race condition between the two statements
+			if (!subscriptions.contains(request.getDate())) {
+				subscriptions.put(request.getDate(), new LinkedList<>());
 			}
 		}
-		subs.get(key).add(new ConcertSubscription(reponse, request.getPercentageBooked()));
-		subs.forEach((k, value) -> System.out.println("Sub " + k + ":" + value));
+		subscriptions.get(request.getDate()).add(new ConcertSubscription(reponse, request.getPercentageBooked()));
 	}
-	
+
 	/* -------- Helper Methods -------- */
 
-	private EntityManager createEM() {
+	private EntityManager createEM() { // Reduce some clutter
 		return PersistenceManager.instance().createEntityManager();
 	}
 
+	/**
+	 * Generates a new session id for the specified user. Id will be saved to
+	 * database and a cookie
+	 * 
+	 * @param user
+	 *            the user to associate the id with
+	 * @param em
+	 *            current entity manager context
+	 * @return a cookie with a new session id/uuid
+	 */
 	private NewCookie newSession(User user, EntityManager em) {
 		user.setSessionId(UUID.randomUUID());
 		em.getTransaction().begin();
@@ -391,8 +376,17 @@ public class ConcertResource {
 		return new NewCookie(AUTH_COOKIE, user.getSessionId().toString());
 	}
 
+	/**
+	 * Gets the logged in user.
+	 * 
+	 * @param authCookie
+	 *            the auth cookie containing the session id/uuid
+	 * @param em
+	 *            current entity manager context
+	 * @return the user associated with the auth cookie, otherwise null
+	 */
 	private User getLoggedInUser(Cookie authCookie, EntityManager em) {
-		if (authCookie == null) {
+		if (authCookie == null) { // No chance if no cookie
 			return null;
 		}
 
@@ -400,30 +394,33 @@ public class ConcertResource {
 		em.getTransaction().begin();
 		try {
 			found = em.createQuery("SELECT u FROM User u where u.sessionId = :uuid", User.class)
-					.setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult();
+					.setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult(); // So many possibilities that chance of collision is ~0
 		} catch (NoResultException e) {
-			// Not logged in
+			// No associated user, must login again
 		}
 		em.getTransaction().commit();
 		return found;
 	}
-	
-	private void checkSubscribers(Pair<Long, LocalDateTime> key, int seatsAvailable) {
+
+	/**
+	 * Checks all notification subscriptions for the concert at a given DateTime.
+	 * Will resume the related AsyncResponse threads.
+	 * 
+	 * @param key
+	 *            DateTime of a concert
+	 * @param seatsAvailable
+	 *            number of seats not yet booked
+	 */
+	private void checkSubscribers(LocalDateTime key, int seatsAvailable) {
 		threadPool.submit(() -> {
-			System.out.println("Submitted");
-			subs.forEach((k, value) -> System.out.println("Sub " + k + ":" + value));
-			System.out.println("----------");
-			double percentageFree = seatsAvailable / (double)TheatreLayout.NUM_SEATS_IN_THEATRE;
-			for (Iterator<ConcertSubscription> iterator = subs.get(key).iterator(); iterator.hasNext();) {
+			double percentageFree = seatsAvailable / (double) TheatreLayout.NUM_SEATS_IN_THEATRE;
+			for (Iterator<ConcertSubscription> iterator = subscriptions.get(key).iterator(); iterator.hasNext();) {
 				ConcertSubscription sub = iterator.next();
-				System.out.println("CHECK " + sub.percentageBooked );
-				if(percentageFree <= sub.percentageBooked) {
-					System.out.println("RESUMING " + sub.percentageBooked );
-					iterator.remove();
+				if (percentageFree <= sub.percentageTarget) {
+					iterator.remove(); // So they only receive notification once
 					sub.response.resume(Response.ok(new ConcertInfoNotificationDTO(seatsAvailable)).build());
 				}
 			}
 		});
 	}
-
 }
