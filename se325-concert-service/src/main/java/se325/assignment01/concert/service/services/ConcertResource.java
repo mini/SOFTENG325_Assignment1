@@ -45,10 +45,10 @@ import se325.assignment01.concert.common.dto.UserDTO;
 import se325.assignment01.concert.common.types.BookingStatus;
 import se325.assignment01.concert.service.domain.Booking;
 import se325.assignment01.concert.service.domain.Concert;
-import se325.assignment01.concert.service.domain.ConcertSubscription;
 import se325.assignment01.concert.service.domain.Performer;
 import se325.assignment01.concert.service.domain.Seat;
 import se325.assignment01.concert.service.domain.User;
+import se325.assignment01.concert.service.jaxrs.ConcertSubscription;
 import se325.assignment01.concert.service.jaxrs.LocalDateTimeParam;
 import se325.assignment01.concert.service.mapper.BookingMapper;
 import se325.assignment01.concert.service.mapper.ConcertMapper;
@@ -413,10 +413,10 @@ public class ConcertResource {
 	 */
 	private void checkSubscribers(LocalDateTime key, int seatsAvailable) {
 		threadPool.submit(() -> {
-			double percentageFree = seatsAvailable / (double) TheatreLayout.NUM_SEATS_IN_THEATRE;
+			double percentageBooked = 1.0 - seatsAvailable / (double) TheatreLayout.NUM_SEATS_IN_THEATRE;
 			for (Iterator<ConcertSubscription> iterator = subscriptions.get(key).iterator(); iterator.hasNext();) {
 				ConcertSubscription sub = iterator.next();
-				if (percentageFree <= sub.percentageTarget) {
+				if (percentageBooked >= sub.percentageTarget) {
 					iterator.remove(); // So they only receive notification once
 					sub.response.resume(Response.ok(new ConcertInfoNotificationDTO(seatsAvailable)).build());
 				}

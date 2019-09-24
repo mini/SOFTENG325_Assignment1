@@ -35,7 +35,7 @@ public class User {
 	@Column(unique = true)
 	private UUID sessionId;
 
-	@OneToMany(cascade = CascadeType.PERSIST, mappedBy = "user")
+	@OneToMany(cascade = {CascadeType.PERSIST, CascadeType.REMOVE}, mappedBy = "user")
 	private Set<Booking> bookings = new HashSet<>();
 
 	public User() {

@@ -10,6 +10,7 @@ import javax.persistence.CollectionTable;
 import javax.persistence.Column;
 import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
@@ -33,7 +34,7 @@ public class Concert {
 	@Column(columnDefinition = "TEXT")
 	private String blurb;
 
-	@ElementCollection
+	@ElementCollection(fetch = FetchType.EAGER) // Where ever Concert is used, we loop through all dates, either validation or dto conversion
 	@CollectionTable(name = "CONCERT_DATES", joinColumns = @JoinColumn(name = "CONCERT_ID"))
 	@Column(name = "DATE")
 	private Set<LocalDateTime> dates = new HashSet<>();

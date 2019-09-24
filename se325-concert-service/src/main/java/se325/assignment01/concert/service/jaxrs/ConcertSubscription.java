@@ -1,4 +1,4 @@
-package se325.assignment01.concert.service.domain;
+package se325.assignment01.concert.service.jaxrs;
 
 import javax.ws.rs.container.AsyncResponse;
 
