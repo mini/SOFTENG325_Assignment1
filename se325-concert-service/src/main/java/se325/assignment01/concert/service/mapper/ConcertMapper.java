@@ -9,6 +9,9 @@ public class ConcertMapper {
 	private ConcertMapper() {
 	}
 
+	/**
+	 * Maps a domain model concert to its relative DTO class
+	 */
 	public static ConcertDTO toDTO(Concert c) {
 		ConcertDTO dto = new ConcertDTO(c.getId(), c.getTitle(), c.getImageName(), c.getBlurb());
 		c.getPerformers().forEach(performer -> dto.getPerformers().add(PerformerMapper.toDTO(performer)));
@@ -16,6 +19,9 @@ public class ConcertMapper {
 		return dto;
 	}
 
+	/**
+	 * Maps a domain model concert to its relative summary DTO class (less detailed that main DTO)
+	 */
 	public static ConcertSummaryDTO toSummaryDTO(Concert c) {
 		return new ConcertSummaryDTO(c.getId(), c.getTitle(), c.getImageName());
 	}

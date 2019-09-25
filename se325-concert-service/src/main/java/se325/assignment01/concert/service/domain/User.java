@@ -17,6 +17,9 @@ import javax.persistence.Version;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
+/**
+ * A registered user.
+ */
 @Entity
 @Table(name = "USERS")
 public class User {

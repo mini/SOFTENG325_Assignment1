@@ -19,6 +19,12 @@ import javax.persistence.JoinTable;
 import javax.persistence.ManyToMany;
 import javax.persistence.Table;
 
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
+
+/**
+ * A Concert with its Dates and Performers
+ */
 @Entity
 @Table(name = "CONCERTS")
 public class Concert {
@@ -34,13 +40,14 @@ public class Concert {
 	@Column(columnDefinition = "TEXT")
 	private String blurb;
 
-	@ElementCollection(fetch = FetchType.EAGER) // Where ever Concert is used, we loop through all dates, either validation or dto conversion
+	@ElementCollection(fetch = FetchType.EAGER)
 	@CollectionTable(name = "CONCERT_DATES", joinColumns = @JoinColumn(name = "CONCERT_ID"))
 	@Column(name = "DATE")
 	private Set<LocalDateTime> dates = new HashSet<>();
 
 	@ManyToMany(cascade = CascadeType.PERSIST)
 	@JoinTable(name = "CONCERT_PERFORMER", joinColumns = @JoinColumn(name = "CONCERT_ID"), inverseJoinColumns = @JoinColumn(name = "PERFORMER_ID"))
+	@Fetch(FetchMode.SUBSELECT)
 	private Set<Performer> performers = new HashSet<>();
 
 	public Concert() {

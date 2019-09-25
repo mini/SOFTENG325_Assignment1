@@ -9,6 +9,9 @@ import javax.persistence.Id;
 import javax.persistence.IdClass;
 import javax.persistence.Table;
 
+/**
+ * Represents a Seat and if it was booked at a specific time
+ */
 @Entity
 @Table(name = "SEATS")
 @IdClass(SeatKey.class)

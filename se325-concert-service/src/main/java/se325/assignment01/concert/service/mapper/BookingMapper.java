@@ -11,6 +11,9 @@ public class BookingMapper {
 	private BookingMapper() {
 	}
 
+	/**
+	 * Maps a domain model booking to its relative DTO class
+	 */
 	public static BookingDTO toDTO(Booking b) {
 		List<SeatDTO> seats = new ArrayList<>();
 		b.getSeats().forEach(seat -> seats.add(SeatMapper.toDTO(seat)));

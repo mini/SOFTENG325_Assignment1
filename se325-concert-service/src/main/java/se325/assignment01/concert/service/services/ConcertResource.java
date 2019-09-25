@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.persistence.EntityManager;
+import javax.persistence.LockModeType;
 import javax.persistence.NoResultException;
 import javax.persistence.TypedQuery;
 import javax.ws.rs.Consumes;
@@ -61,118 +62,172 @@ import se325.assignment01.concert.service.util.TheatreLayout;
 @Consumes(MediaType.APPLICATION_JSON)
 public class ConcertResource {
 
+	
+	/* NOTES
+	 * 
+	 * - Would use more optimistic locks but they weren't working... (I did have @Version tags in those classes) 
+	 *   Especially for the get single/all concerts/performers end points. 
+	 * 
+	 * - Wasn't sure how to handle the async end point. Because the client is directly connected to an instance,
+	 *   if another instance handles a booking, how would the first instance know when to send the notification?
+	 *   You could store which user is listening to which concert and on which instance... but you'd need to keep polling
+	 *   the database?
+	 */
+	
 	public static final String AUTH_COOKIE = "auth";
 
 	private static final ConcurrentHashMap<LocalDateTime, LinkedList<ConcertSubscription>> subscriptions = new ConcurrentHashMap<>();
 	private static final ExecutorService threadPool = Executors.newSingleThreadExecutor();
 
-	// First 5 methods are pretty much English
-
+	/**
+	 * Gets all concerts stored in database
+	 */
 	@GET
 	@Path("/concerts")
 	public Response getAllConcerts() {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Concert> concerts = em.createQuery("SELECT c FROM Concert c", Concert.class).getResultList();
-			em.getTransaction().commit();
+			List<Concert> concerts = em.createQuery("SELECT c FROM Concert c", Concert.class)
+					.setLockMode(LockModeType.PESSIMISTIC_READ)
+					.getResultList();
 
 			if (concerts.isEmpty()) {
 				return Response.noContent().build();
 			}
 
+			// Convert to DTOs
 			Set<ConcertDTO> dtoConcerts = new HashSet<>();
 			concerts.forEach(concert -> dtoConcerts.add(ConcertMapper.toDTO(concert)));
+			em.getTransaction().commit();
 
 			GenericEntity<Set<ConcertDTO>> out = new GenericEntity<Set<ConcertDTO>>(dtoConcerts) {};
 			return Response.ok(out).build();
 		} finally {
+			if (em.getTransaction().isActive()) { 
+				em.getTransaction().commit(); // Mainly for early returns
+			}
 			em.close();
 		}
 	}
-
+	
+	/**
+	 * Gets a concert stored in database from its id.
+	 * Returns 404 if it doesn't exist
+	 */
 	@GET
 	@Path("/concerts/{id}")
 	public Response getConcert(@PathParam("id") long id) {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			Concert concert = em.find(Concert.class, id);
-			em.getTransaction().commit();
+			Concert concert = em.find(Concert.class, id, LockModeType.PESSIMISTIC_READ);
 
 			if (concert == null) {
 				return Response.status(Status.NOT_FOUND).build();
 			}
 			return Response.ok(ConcertMapper.toDTO(concert)).build();
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 	}
 
+	/**
+	 * Gets all concert's summaries stored in database
+	 */
 	@GET
 	@Path("/concerts/summaries")
 	public Response getSummaries() {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Concert> concerts = em.createQuery("SELECT c FROM Concert c", Concert.class).getResultList();
-			em.getTransaction().commit();
+			List<Concert> concerts = em.createQuery("SELECT c FROM Concert c", Concert.class)
+					.setLockMode(LockModeType.PESSIMISTIC_READ)
+					.getResultList();
 
 			if (concerts.isEmpty()) {
 				return Response.noContent().build();
 			}
 
+			// Convert to DTOs
 			Set<ConcertSummaryDTO> dtoSummaries = new HashSet<>();
 			concerts.forEach(concert -> dtoSummaries.add(ConcertMapper.toSummaryDTO(concert)));
+			em.getTransaction().commit();
 
 			GenericEntity<Set<ConcertSummaryDTO>> out = new GenericEntity<Set<ConcertSummaryDTO>>(dtoSummaries) {};
 			return Response.ok(out).build();
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 	}
 
+	/**
+	 * Gets all performers stored in database
+	 */
 	@GET
 	@Path("/performers")
 	public Response getAllPerformers() {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			List<Performer> performers = em.createQuery("SELECT p FROM Performer p", Performer.class).getResultList();
-			em.getTransaction().commit();
+			List<Performer> performers = em.createQuery("SELECT p FROM Performer p", Performer.class)
+					.setLockMode(LockModeType.PESSIMISTIC_READ)
+					.getResultList();
 
 			if (performers.isEmpty()) {
 				return Response.noContent().build();
 			}
 
+			// Convert to DTOs
 			Set<PerformerDTO> dtoPerformers = new HashSet<>();
 			performers.forEach(performer -> dtoPerformers.add(PerformerMapper.toDTO(performer)));
+			em.getTransaction().commit();
 
 			GenericEntity<Set<PerformerDTO>> out = new GenericEntity<Set<PerformerDTO>>(dtoPerformers) {};
 			return Response.ok(out).build();
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 	}
 
+	/**
+	 * Gets a performer stored in database from its id.
+	 * Returns 404 if it doesn't exist
+	 */
 	@GET
 	@Path("/performers/{id}")
 	public Response getPerformer(@PathParam("id") long id) {
 		EntityManager em = createEM();
 		try {
 			em.getTransaction().begin();
-			Performer performer = em.find(Performer.class, id);
-			em.getTransaction().commit();
+			Performer performer = em.find(Performer.class, id, LockModeType.PESSIMISTIC_READ);
 
 			if (performer == null) {
 				return Response.status(Status.NOT_FOUND).build();
 			}
 			return Response.ok(PerformerMapper.toDTO(performer)).build();
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 	}
 
+	/**
+	 * Checks the supplied credentials against the database.
+	 * Sets a cookie with a session id if there's a match, 
+	 * otherwise returns 401
+	 */
 	@POST
 	@Path("/login")
 	public Response login(UserDTO attempt) {
@@ -184,6 +239,7 @@ public class ConcertResource {
 				user = em.createQuery("SELECT u FROM User u where u.username = :username AND u.password = :password", User.class)
 						.setParameter("username", attempt.getUsername())
 						.setParameter("password", attempt.getPassword())
+						.setLockMode(LockModeType.PESSIMISTIC_READ)
 						.getSingleResult();
 			} catch (NoResultException e) { // No username-password match
 				return Response.status(Status.UNAUTHORIZED).build();
@@ -197,6 +253,10 @@ public class ConcertResource {
 		}
 	}
 
+	/**
+	 * Creates a booking for the specified concert, date, and seats for the logged in user.
+	 * Returns 401 is not logged in, 400 if no concert-date exists, 403 if requested seats are unavailable
+	 */
 	@POST
 	@Path("/bookings")
 	public Response makeBooking(BookingRequestDTO request, @CookieParam(AUTH_COOKIE) Cookie authCookie) {
@@ -206,46 +266,52 @@ public class ConcertResource {
 			if (user == null) {
 				return Response.status(Status.UNAUTHORIZED).build();
 			}
-
-			em.getTransaction().begin();
-
-			Concert concert = em.find(Concert.class, request.getConcertId());
+			
+			em.getTransaction().begin(); // Check concert and time
+			Concert concert = em.find(Concert.class, request.getConcertId(), LockModeType.PESSIMISTIC_READ);
 			if (concert == null || !concert.getDates().contains(request.getDate())) {
-				em.getTransaction().commit();
 				return Response.status(Status.BAD_REQUEST).build();
 			}
-
-
-			List<Seat> freeSeatsFound = em.createQuery("SELECT s FROM Seat s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
+			em.getTransaction().commit();
+			
+			em.getTransaction().begin(); // Check if requested seats are available
+			List<Seat> freeReqestedSeats = em.createQuery("SELECT s FROM Seat s WHERE s.label IN :label AND s.date = :date AND s.isBooked = false", Seat.class)
 					.setParameter("label", request.getSeatLabels())
 					.setParameter("date", request.getDate())
+					.setLockMode(LockModeType.PESSIMISTIC_WRITE)
 					.getResultList();
 
-			if (freeSeatsFound.size() != request.getSeatLabels().size()) {
-				em.getTransaction().commit();
+			if (freeReqestedSeats.size() != request.getSeatLabels().size()) {
 				return Response.status(Status.FORBIDDEN).build();
 			}
-			
+
+			// All good, make booking
+			Booking booking = new Booking(user, request.getConcertId(), request.getDate());
+			booking.getSeats().addAll(freeReqestedSeats);
+			freeReqestedSeats.forEach(seat -> seat.setIsBooked(true));
+			em.persist(booking);
+
+			// Get remaining seats for notifications
 			int freeSeats = em.createQuery("SELECT COUNT(s) FROM Seat s WHERE s.date = :date AND s.isBooked = false", Long.class)
 					.setParameter("date", request.getDate())
 					.getSingleResult()
 					.intValue();
-			checkSubscribers(request.getDate(), freeSeats - freeSeatsFound.size());
-
+			checkSubscribers(request.getDate(), freeSeats);
 			
-			Booking booking = new Booking(user, request.getConcertId(), request.getDate());
-			booking.getSeats().addAll(freeSeatsFound);
-			freeSeatsFound.forEach(seat -> seat.setIsBooked(true));
-
-			em.persist(booking);
 			em.getTransaction().commit();
 
 			return Response.created(URI.create("/concert-service/bookings/" + booking.getId())).build();
 		} finally {
-			em.close();
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 		}
 	}
 
+	/**
+	 * Gets the logged in user's bookings.
+	 * Returns 401 if client isn't logged in.
+	 */
 	@GET
 	@Path("/bookings")
 	public Response getUsersBookings(@CookieParam(AUTH_COOKIE) Cookie authCookie) {
@@ -256,9 +322,14 @@ public class ConcertResource {
 				return Response.status(Status.UNAUTHORIZED).build();
 			}
 
+			// Get bookings and convert to DTOs
+			em.getTransaction().begin();
+			em.lock(user, LockModeType.OPTIMISTIC);
 			Set<BookingDTO> dtoBookings = new HashSet<>();
 			user.getBookings().forEach(booking -> dtoBookings.add(BookingMapper.toDTO(booking)));
-
+			
+			em.getTransaction().commit();
+			
 			GenericEntity<Set<BookingDTO>> out = new GenericEntity<Set<BookingDTO>>(dtoBookings) {};
 			return Response.ok(out).build();
 		} finally {
@@ -266,6 +337,10 @@ public class ConcertResource {
 		}
 	}
 
+	/**
+	 * Gets a specific booking entry
+	 * Returns 401 if client isn't logged in, 403 if logged in user is not the booking's owner
+	 */
 	@GET
 	@Path("/bookings/{id}")
 	public Response getBooking(@PathParam("id") Long id, @CookieParam(AUTH_COOKIE) Cookie authCookie) {
@@ -277,8 +352,7 @@ public class ConcertResource {
 			}
 
 			em.getTransaction().begin();
-			Booking booking = em.find(Booking.class, id);
-			em.getTransaction().commit();
+			Booking booking = em.find(Booking.class, id, LockModeType.PESSIMISTIC_READ);
 
 			if (!booking.getUser().equals(user)) {
 				return Response.status(Status.FORBIDDEN).build();
@@ -286,17 +360,36 @@ public class ConcertResource {
 
 			return Response.ok(BookingMapper.toDTO(booking)).build();
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 	}
 
+	/**
+	 * Get the status for all seats for a concert date. Can filter results by appending ?status=[BookingStatus]
+	 * Returns 400 for invalid dates
+	 */
 	@GET
 	@Path("/seats/{date}")
 	public Response getSeatStatus(@PathParam("date") String dateString, @DefaultValue("Any") @QueryParam("status") BookingStatus status) {
 		LocalDateTime date = new LocalDateTimeParam(dateString).getLocalDateTime();
 		EntityManager em = createEM();
 		try {
+			// Check date is valid
+			em.getTransaction().begin();
+			boolean validDate = em.createQuery("SELECT COUNT(s) FROM Seat s WHERE s.date = :date", Long.class)
+					.setLockMode(LockModeType.PESSIMISTIC_READ)
+					.setParameter("date", new LocalDateTimeParam(dateString).getLocalDateTime())
+					.getSingleResult()
+					.intValue() > 0;
+			if(!validDate) {
+				return Response.status(Status.BAD_REQUEST).build();
+			}
+			em.getTransaction().commit();
 
+			// Get seat statuses
 			em.getTransaction().begin();
 			TypedQuery<Seat> selectQuery;
 			if (status == BookingStatus.Any) {
@@ -307,20 +400,31 @@ public class ConcertResource {
 						.setParameter("date", date)
 						.setParameter("status", status == BookingStatus.Booked);
 			}
-			List<Seat> seats = selectQuery.getResultList();
-			em.getTransaction().commit();
-
+			List<Seat> seats = selectQuery
+					.setLockMode(LockModeType.PESSIMISTIC_READ)
+					.getResultList();
+			
+			// Convert to DTOs
 			Set<SeatDTO> dtoSeats = new HashSet<>();
 			seats.forEach(seat -> dtoSeats.add(SeatMapper.toDTO(seat)));
+
+			em.getTransaction().commit();
 
 			GenericEntity<Set<SeatDTO>> out = new GenericEntity<Set<SeatDTO>>(dtoSeats) {};
 			return Response.ok(out).build();
 
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 	}
 
+	/**
+	 * End point to subscribe to an alert when percentage of seats booked reaches the specified threshold.
+	 * Returns 401 if not logged in, 400 if concert doesn't exist
+	 */
 	@POST
 	@Path("/subscribe/concertInfo")
 	public void subscribeToConcert(@Suspended AsyncResponse reponse, @CookieParam(AUTH_COOKIE) Cookie authCookie, ConcertInfoSubscriptionDTO request) {
@@ -334,14 +438,16 @@ public class ConcertResource {
 
 			em.getTransaction().begin();
 
-			Concert concert = em.find(Concert.class, request.getConcertId());
+			// Validate target concert
+			Concert concert = em.find(Concert.class, request.getConcertId(), LockModeType.PESSIMISTIC_READ);
 			if (concert == null || !concert.getDates().contains(request.getDate())) {
-				em.getTransaction().commit();
 				reponse.resume(Response.status(Status.BAD_REQUEST).build());
 				return;
 			}
-			em.getTransaction().commit();
 		} finally {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().commit();
+			}
 			em.close();
 		}
 		synchronized (subscriptions) { // Race condition between the two statements
@@ -369,9 +475,9 @@ public class ConcertResource {
 	 * @return a cookie with a new session id/uuid
 	 */
 	private NewCookie newSession(User user, EntityManager em) {
-		user.setSessionId(UUID.randomUUID());
 		em.getTransaction().begin();
-		em.merge(user);
+		em.lock(user, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+		user.setSessionId(UUID.randomUUID());
 		em.getTransaction().commit();
 		return new NewCookie(AUTH_COOKIE, user.getSessionId().toString());
 	}
@@ -394,7 +500,9 @@ public class ConcertResource {
 		em.getTransaction().begin();
 		try {
 			found = em.createQuery("SELECT u FROM User u where u.sessionId = :uuid", User.class)
-					.setParameter("uuid", UUID.fromString(authCookie.getValue())).getSingleResult(); // So many possibilities that chance of collision is ~0
+					.setParameter("uuid", UUID.fromString(authCookie.getValue())) // So many possibilities that chance of a collision is ~0
+					.setLockMode(LockModeType.OPTIMISTIC)
+					.getSingleResult();
 		} catch (NoResultException e) {
 			// No associated user, must login again
 		}

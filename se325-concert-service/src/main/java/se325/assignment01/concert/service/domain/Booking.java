@@ -14,6 +14,9 @@ import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 
+/**
+ * A booking for a concert
+ */
 @Entity
 @Table(name = "BOOKINGS")
 public class Booking {

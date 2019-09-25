@@ -14,6 +14,9 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
 
 import se325.assignment01.concert.common.types.Genre;
 
+/**
+ * A Performer of a Concert
+ */
 @Entity
 @Table(name = "PERFORMERS")
 public class Performer {

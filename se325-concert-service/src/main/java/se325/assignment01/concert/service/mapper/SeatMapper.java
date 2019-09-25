@@ -8,6 +8,9 @@ public class SeatMapper {
 	private SeatMapper() {
 	}
 
+	/**
+	 * Maps a domain model seat to its relative DTO class
+	 */
 	public static SeatDTO toDTO(Seat s) {
 		return new SeatDTO(s.getLabel(), s.getPrice());
 	}

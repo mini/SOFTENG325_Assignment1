@@ -4,6 +4,9 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+/**
+ * The composite primary key for a Seat
+ */
 public class SeatKey implements Serializable {
 	private static final long serialVersionUID = -5504649016409889372L;
 	private String label;
